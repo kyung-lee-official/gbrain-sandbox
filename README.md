@@ -53,7 +53,9 @@ gbrain sync
 
 ## Local image storage (optional)
 
-For `gbrain files upload` / binary storage, configure once:
+Markdown image links (`../assets/...`) work without any config — files stay on disk in git.
+
+The command below is only for gbrain's **binary file API** (`gbrain files upload`, cloud redirects, large files you don't want in git). Skip unless you need that.
 
 ```bash
 gbrain config set storage '{"backend":"local","bucket":"brain-files","localPath":"./assets"}'
