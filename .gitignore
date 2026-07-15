@@ -1,0 +1,14 @@
+# Secrets
+.env
+.env.local
+
+# gbrain local state (if GBRAIN_HOME=./.gbrain)
+.gbrain/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
