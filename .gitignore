@@ -12,3 +12,6 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Local test page (copy from README)
+knowledge/test-demo.md
