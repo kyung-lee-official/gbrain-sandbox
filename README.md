@@ -1,44 +1,171 @@
 # gbrain-sandbox
 
-Project-level gbrain brain repo. Run all `gbrain` commands from this root (Bun auto-loads `.env` from cwd).
+Multi-user demo: Bun HTTP API with **shared knowledge in gbrain** and **personal memory in app Postgres**. No per-user git repos or per-user gbrain sources.
 
 ## Layout
 
 ```
 gbrain-sandbox/
-├── .env              # gbrain-readable config (see below)
-├── knowledge/        # Markdown docs
-├── assets/           # Images referenced from knowledge/
-└── README.md
+├── .env                    # gbrain + Bun (see .env.example)
+├── shared-source/          # Maintainer knowledge → one gbrain source
+├── server/                 # Bun API (users, chat, personal memory, gbrain client)
+├── scripts/setup-gbrain.ts # Register shared-source + one shared OAuth client
+└── assets/                 # Images (optional)
 ```
 
-Put all markdown in `knowledge/` only — gbrain sync is scoped to that folder, not the project root. Reference images from `assets/` like:
+Only `shared-source/` is a nested git repo (required by `gbrain sync`). Personal memory does **not** use git or gbrain sources.
 
-```markdown
-![diagram](../assets/diagram.png)
+## Architecture
+
+| Layer | Storage | Scope | Git? |
+| --- | --- | --- | --- |
+| Shared knowledge | gbrain `shared-source` | Everyone | Yes (maintainer sync) |
+| Personal memory | Postgres `app_memories` | Owner only (`user_id` filter) | No |
+| Chat turns | Postgres `app_messages` | Per user (Bun) | No |
+
+```mermaid
+%%{init: {'theme': 'neo-dark'}}%%
+flowchart LR
+  subgraph clients [Clients]
+    Lily[Lily]
+    Bob[Bob]
+  end
+  subgraph bun [Bun API :3000]
+    Auth[Bearer demo-key-*]
+    Mem[app_memories]
+    Chat[app_sessions / app_messages]
+  end
+  subgraph gbrain [gbrain serve --http :3131]
+    Think[think — shared only]
+  end
+  subgraph shared [Shared corpus]
+    Pages[shared-source pages]
+  end
+  Lily --> Auth
+  Bob --> Auth
+  Auth --> Mem
+  Auth --> Chat
+  Auth --> Think
+  Think --> Pages
 ```
+
+**Query:** load chat history + this user's `app_memories` → call gbrain `think` (shared corpus) with personal memory injected into the question → store turn.
+
+**Remember:** insert into `app_memories` for `user_id` only.
+
+**New user:** insert `app_users` row → ready. No `sources add`, no `git init`, no OAuth client per user.
+
+At scale, user count grows **rows** in `app_memories`, not filesystem repos or gbrain sources. Isolation is a hard `user_id` filter. One app-level OAuth client calls gbrain `think`.
+
+## Prerequisites
+
+- Postgres (`GBRAIN_DATABASE_URL`)
+- `gbrain`, `bun`, Ollama (`nomic-embed-text`), DeepSeek API key
+- `gbrain serve --http` on port **3131**
+
+## Gbrain: project vs global
+
+gbrain can run **globally** (`~/.gbrain`) or **per project** (`.env` + sources in a repo). This sandbox is **project-scoped** — run `gbrain` commands, including `gbrain serve --http --port 3131`, from **this repo root** so `.env` and `./shared-source` resolve correctly.
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and fill in values.
-2. Pull the embedding model: `ollama pull nomic-embed-text`
-3. Register `knowledge/` and do the first import:
+### 1. Install
 
 ```bash
-gbrain sources add sandbox --path ./knowledge
-gbrain sync
+bun install
+```
+
+### 2. Environment
+
+Copy `.env.example` to `.env` and fill in values.
+
+### 3. Shared source + OAuth (one-time)
+
+```bash
+bun run setup:gbrain
+```
+
+Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, read-only on shared), stores it in `app_gbrain_auth`, and seeds demo users Lily/Bob. Re-runs skip existing source/OAuth unless you pass `-- --force-oauth`.
+
+### 4. Start gbrain (terminal 1)
+
+```bash
+gbrain serve --http --port 3131
+```
+
+### 5. Start Bun API (terminal 2)
+
+```bash
+bun run server
+```
+
+Listens on `http://localhost:3000` (override with `PORT`).
+
+## API (demo auth)
+
+| Endpoint | Auth | Body |
+| --- | --- | --- |
+| `GET /health` | none | — |
+| `POST /query` | `Authorization: Bearer demo-key-lily` or `demo-key-bob` | `{ "message": "..." }` |
+| `POST /remember` | same | `{ "content": "..." }` |
+
+### Examples
+
+```bash
+# Shared knowledge via gbrain think
+curl -s -X POST http://localhost:3000/query \
+  -H "Authorization: Bearer demo-key-lily" \
+  -H "Content-Type: application/json" \
+  -d "{\"message\":\"What is the sandbox verification protocol codename?\"}"
+
+# Personal memory (app Postgres, Lily only)
+curl -s -X POST http://localhost:3000/remember \
+  -H "Authorization: Bearer demo-key-lily" \
+  -H "Content-Type: application/json" \
+  -d "{\"content\":\"My favorite coffee is oat latte.\"}"
+
+curl -s -X POST http://localhost:3000/query \
+  -H "Authorization: Bearer demo-key-lily" \
+  -H "Content-Type: application/json" \
+  -d "{\"message\":\"What is my favorite coffee?\"}"
+
+# Bob cannot see Lily's app_memories
+curl -s -X POST http://localhost:3000/query \
+  -H "Authorization: Bearer demo-key-bob" \
+  -H "Content-Type: application/json" \
+  -d "{\"message\":\"What is Lily favorite coffee?\"}"
+```
+
+## Maintainer workflow (shared only)
+
+Add markdown under `shared-source/`, commit in that nested repo, then:
+
+```bash
+gbrain sync --source shared-source
+gbrain embed --stale
+```
+
+## Postgres tables (Bun)
+
+| Table | Purpose |
+| --- | --- |
+| `app_users` | Demo users + API keys |
+| `app_gbrain_auth` | One shared OAuth client for gbrain `think` |
+| `app_memories` | Personal notes (`user_id` + `slug` + `content`) |
+| `app_sessions` | One active thread per user |
+| `app_messages` | Chat history |
+
+```sql
+SELECT id, api_key FROM app_users;
+SELECT user_id, slug, left(content, 80) FROM app_memories ORDER BY created_at DESC LIMIT 10;
+SELECT role, left(content, 80) FROM app_messages ORDER BY created_at DESC LIMIT 10;
 ```
 
 ## Test demo (local only)
 
-`knowledge/test-demo.md` is gitignored. Create it locally to verify sync, embedding, and retrieval with unique Q&A answers that exist nowhere else.
+`shared-source/test-demo.md` is gitignored. Copy the block below into that file, commit inside `shared-source/`, then `gbrain sync --source shared-source`.
 
-```bash
-# from repo root — paste the block below into this file
-# knowledge/test-demo.md
-```
-
-```markdown
+````markdown
 ---
 title: Sandbox demo (testing only)
 type: note
@@ -47,71 +174,39 @@ tags: [demo, testing]
 
 # Sandbox demo (testing only)
 
-This page exists to verify gbrain sync, embedding, and search in `gbrain-sandbox`. Delete it when you are done testing.
-
-## What this brain is for
-
-`gbrain-sandbox` is a project-level brain with markdown in `knowledge/` and images in `assets/`. Run all `gbrain` commands from the repo root.
-
-## Verification Q&A (unique to this file)
-
-Use these questions after sync + embed. Answers exist **only** in this page — if gbrain returns them, retrieval is working.
-
 **Q: What is the codename of the sandbox verification protocol?**  
 A: Project Luminous Fern.
 
 **Q: What passphrase unlocks the sandbox test vault?**  
 A: cerulean-moth-7742.
+````
 
-**Q: Who is the fictional Chief Archivist of the sandbox brain?**  
-A: Zylfen of the Amber Stacks.
+## Env vars
 
-**Q: How many imaginary sentinel moths guard the test knowledge base?**  
-A: Seven sentinel moths, arranged in a heptagonal watch.
+| Variable | Purpose |
+| --- | --- |
+| `GBRAIN_DATABASE_URL` | gbrain + default app DB |
+| `APP_DATABASE_URL` | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`) |
+| `DEEPSEEK_API_KEY` | Used by gbrain `think` |
+| `GBRAIN_CHAT_MODEL` | e.g. `deepseek:deepseek-v4-flash` |
+| `GBRAIN_EMBEDDING_MODEL` | e.g. `ollama:nomic-embed-text` |
+| `GBRAIN_EMBEDDING_DIMENSIONS` | e.g. `768` |
+| `GBRAIN_MCP_BASE_URL` | Default `http://localhost:3131` |
+| `PORT` | Bun API port (default `3000`) |
 
-**Q: What color is the nonexistent sandbox beacon flame?**  
-A: Violet-green, visible only on leap-year Tuesdays.
-
-## Quick test queries
-
-After `gbrain sync` and `gbrain embed --stale`, try:
-
-- `gbrain query "What is the codename of the sandbox verification protocol?"`
-- `gbrain query "What passphrase unlocks the sandbox test vault?"`
-- `gbrain query "Who is the Chief Archivist of the sandbox brain?"`
-- `gbrain get test-demo`
-```
-
-Then sync and confirm retrieval, e.g. `gbrain query "What passphrase unlocks the sandbox test vault?"` should answer `cerulean-moth-7742`.
-
-## Commands
-
-**`gbrain sources add sandbox --path ./knowledge`** — register `knowledge/` as source `sandbox` (tells `sync` where markdown lives). Does not import content.
-
-**`gbrain sources remove sandbox --confirm-destructive`** — delete source `sandbox` and all its pages from the brain DB. Use when re-registering with a different path; does not delete files on disk.
-
-**`gbrain import ./knowledge`** — one-shot bulk import of `knowledge/` (alternative to `sync` for first load).
-
-**`gbrain embed --stale`** — generate vector embeddings for imported chunks that don't have them yet (required for semantic search).
-
-**`gbrain sync`** — incremental sync of `knowledge/`. Picks up added/changed/deleted markdown since the last run, imports the diff, then embeds stale chunks. Use for day-to-day updates. Run `gbrain sync --watch` to keep syncing on an interval.
-
-## Env vars gbrain reads
-
-| Variable                      | Purpose                                            |
-| ----------------------------- | -------------------------------------------------- |
-| `GBRAIN_DATABASE_URL`         | Postgres connection (use this, not `DATABASE_URL`) |
-| `DEEPSEEK_API_KEY`            | Chat API key                                       |
-| `GBRAIN_CHAT_MODEL`           | Chat model (e.g. `deepseek:deepseek-v4-flash`)     |
-| `GBRAIN_EMBEDDING_MODEL`      | Embedding model (e.g. `ollama:nomic-embed-text`)   |
-| `GBRAIN_EMBEDDING_DIMENSIONS` | Embedding dimensions (e.g. `768`)                  |
-
-## Local image storage (optional)
-
-Markdown image links (`../assets/...`) work without any config — files stay on disk in git.
-
-The command below is only for gbrain's **binary file API** (`gbrain files upload`, cloud redirects, large files you don't want in git). Skip unless you need that.
+## gbrain CLI (direct)
 
 ```bash
-gbrain config set storage '{"backend":"local","bucket":"brain-files","localPath":"./assets"}'
+gbrain sources list
+gbrain sync --source shared-source
+gbrain embed --stale
+gbrain doctor
 ```
+
+## Out of scope for this demo
+
+- Real user login / signup API (JWT); demo uses hardcoded API keys
+- Vector embeddings for personal memory (Postgres FTS + recent fallback)
+- Multiple sessions per user
+- Rate limits / quotas on `think`
+- TLS / production deployment

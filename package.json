@@ -1,0 +1,15 @@
+{
+  "name": "gbrain-sandbox",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "server": "bun --env-file=.env run server/index.ts",
+    "setup:gbrain": "bun --env-file=.env run scripts/setup-gbrain.ts"
+  },
+  "dependencies": {
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

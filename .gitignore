@@ -1,3 +1,6 @@
+# bun
+node_modules/
+
 # Secrets
 .env
 .env.local
@@ -12,6 +15,10 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+.cursor/
+
+# Nested git for shared-source (gbrain sync requires a git repo at the source path)
+shared-source/.git/
 
 # Local test page (copy from README)
-knowledge/test-demo.md
+shared-source/test-demo.md
