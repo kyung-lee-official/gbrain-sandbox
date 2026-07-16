@@ -17,11 +17,11 @@ Only `shared-source/` is a nested git repo (required by `gbrain sync`). Personal
 
 ## Architecture
 
-| Layer | Storage | Scope | Git? |
-| --- | --- | --- | --- |
-| Shared knowledge | gbrain `shared-source` | Everyone | Yes (maintainer sync) |
-| Personal memory | Postgres `app_memories` | Owner only (`user_id` filter) | No |
-| Chat turns | Postgres `app_messages` | Per user (Bun) | No |
+| Layer            | Storage                 | Scope                         | Git?                  |
+| ---------------- | ----------------------- | ----------------------------- | --------------------- |
+| Shared knowledge | gbrain `shared-source`  | Everyone                      | Yes (maintainer sync) |
+| Personal memory  | Postgres `app_memories` | Owner only (`user_id` filter) | No                    |
+| Chat turns       | Postgres `app_messages` | Per user (Bun)                | No                    |
 
 ```mermaid
 %%{init: {'theme': 'neo-dark'}}%%
@@ -103,11 +103,11 @@ Listens on `http://localhost:3000` (override with `PORT`).
 
 ## API (demo auth)
 
-| Endpoint | Auth | Body |
-| --- | --- | --- |
-| `GET /health` | none | — |
-| `POST /query` | `Authorization: Bearer demo-key-lily` or `demo-key-bob` | `{ "message": "..." }` |
-| `POST /remember` | same | `{ "content": "..." }` |
+| Endpoint         | Auth                                                    | Body                   |
+| ---------------- | ------------------------------------------------------- | ---------------------- |
+| `GET /health`    | none                                                    | —                      |
+| `POST /query`    | `Authorization: Bearer demo-key-lily` or `demo-key-bob` | `{ "message": "..." }` |
+| `POST /remember` | same                                                    | `{ "content": "..." }` |
 
 ### Examples
 
@@ -147,13 +147,13 @@ gbrain embed --stale
 
 ## Postgres tables (Bun)
 
-| Table | Purpose |
-| --- | --- |
-| `app_users` | Demo users + API keys |
-| `app_gbrain_auth` | One shared OAuth client for gbrain `think` |
-| `app_memories` | Personal notes (`user_id` + `slug` + `content`) |
-| `app_sessions` | One active thread per user |
-| `app_messages` | Chat history |
+| Table             | Purpose                                         |
+| ----------------- | ----------------------------------------------- |
+| `app_users`       | Demo users + API keys                           |
+| `app_gbrain_auth` | One shared OAuth client for gbrain `think`      |
+| `app_memories`    | Personal notes (`user_id` + `slug` + `content`) |
+| `app_sessions`    | One active thread per user                      |
+| `app_messages`    | Chat history                                    |
 
 ```sql
 SELECT id, api_key FROM app_users;
@@ -165,7 +165,7 @@ SELECT role, left(content, 80) FROM app_messages ORDER BY created_at DESC LIMIT 
 
 `shared-source/test-demo.md` is gitignored. Copy the block below into that file, commit inside `shared-source/`, then `gbrain sync --source shared-source`.
 
-````markdown
+```markdown
 ---
 title: Sandbox demo (testing only)
 type: note
@@ -179,20 +179,20 @@ A: Project Luminous Fern.
 
 **Q: What passphrase unlocks the sandbox test vault?**  
 A: cerulean-moth-7742.
-````
+```
 
 ## Env vars
 
-| Variable | Purpose |
-| --- | --- |
-| `GBRAIN_DATABASE_URL` | gbrain + default app DB |
-| `APP_DATABASE_URL` | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`) |
-| `DEEPSEEK_API_KEY` | Used by gbrain `think` |
-| `GBRAIN_CHAT_MODEL` | e.g. `deepseek:deepseek-v4-flash` |
-| `GBRAIN_EMBEDDING_MODEL` | e.g. `ollama:nomic-embed-text` |
-| `GBRAIN_EMBEDDING_DIMENSIONS` | e.g. `768` |
-| `GBRAIN_MCP_BASE_URL` | Default `http://localhost:3131` |
-| `PORT` | Bun API port (default `3000`) |
+| Variable                      | Purpose                                                    |
+| ----------------------------- | ---------------------------------------------------------- |
+| `GBRAIN_DATABASE_URL`         | gbrain + default app DB                                    |
+| `APP_DATABASE_URL`            | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`) |
+| `DEEPSEEK_API_KEY`            | Used by gbrain `think`                                     |
+| `GBRAIN_CHAT_MODEL`           | e.g. `deepseek:deepseek-v4-flash`                          |
+| `GBRAIN_EMBEDDING_MODEL`      | e.g. `ollama:nomic-embed-text`                             |
+| `GBRAIN_EMBEDDING_DIMENSIONS` | e.g. `768`                                                 |
+| `GBRAIN_MCP_BASE_URL`         | Default `http://localhost:3131`                            |
+| `PORT`                        | Bun API port (default `3000`)                              |
 
 ## gbrain CLI (direct)
 
