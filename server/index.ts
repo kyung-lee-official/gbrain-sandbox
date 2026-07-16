@@ -26,8 +26,9 @@ function unauthorized(): Response {
 async function resolveUser(req: Request) {
   const header = req.headers.get('Authorization') ?? '';
   const match = header.match(/^Bearer\s+(.+)$/i);
-  if (!match) return null;
-  return getUserByApiKey(match[1].trim());
+  const apiKey = match?.[1]?.trim();
+  if (!apiKey) return null;
+  return getUserByApiKey(apiKey);
 }
 
 async function handleQuery(req: Request): Promise<Response> {
