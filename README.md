@@ -25,29 +25,71 @@ Only `shared-source/` is a nested git repo (required by `gbrain sync`). Personal
 
 ```mermaid
 %%{init: {'theme': 'neo-dark'}}%%
-flowchart LR
+flowchart TB
   subgraph clients [Clients]
-    Lily[Lily]
-    Bob[Bob]
+    Lily[Lily / Bob]
   end
+
   subgraph bun [Bun API :3000]
-    Auth[Bearer demo-key-*]
-    Mem[app_memories]
-    Chat[app_sessions / app_messages]
+    Auth[Auth demo-key]
+    Remember["POST /remember"]
+    Query["POST /query"]
+    Mem[(app_memories FTS)]
+    Chat[(app_sessions / app_messages)]
+    Build[Build think question<br/>chat + personal notes]
   end
+
+  subgraph maintainer [Maintainer — offline]
+    MD[shared-source/*.md]
+    Sync["gbrain sync / embed"]
+  end
+
   subgraph gbrain [gbrain serve --http :3131]
-    Think[think — shared only]
+    Think[think tool]
+    Retrieve[Hybrid retrieve<br/>uses chunk embeddings]
+    Synth[LLM synthesis]
   end
-  subgraph shared [Shared corpus]
-    Pages[shared-source pages]
+
+  subgraph models [Models]
+    Ollama["Ollama nomic-embed-text<br/>EMBEDDING"]
+    DeepSeek["DeepSeek via GBRAIN_CHAT_MODEL<br/>LLM"]
   end
+
+  subgraph store [Postgres brain]
+    Pages[shared-source pages / chunks]
+    Embs[(chunk embeddings)]
+  end
+
   Lily --> Auth
-  Bob --> Auth
-  Auth --> Mem
-  Auth --> Chat
-  Auth --> Think
-  Think --> Pages
+  Auth --> Remember
+  Auth --> Query
+
+  Remember --> Mem
+
+  Query --> Chat
+  Query --> Mem
+  Query --> Build
+  Build --> Think
+
+  Think --> Retrieve
+  Retrieve --> Pages
+  Retrieve --> Embs
+  Think --> Synth
+  Synth --> DeepSeek
+  Synth --> Chat
+
+  MD --> Sync
+  Sync --> Pages
+  Sync --> Ollama
+  Ollama --> Embs
 ```
+
+| Path | Embedding (Ollama) | LLM (DeepSeek) |
+| --- | --- | --- |
+| Maintainer `sync` / `embed` | Yes — embed shared chunks into the brain | No |
+| `POST /query` → gbrain `think` | Yes — retrieve shared chunks by embedding (+ hybrid) | Yes — synthesize the answer |
+| `POST /remember` | No — row in `app_memories` only | No |
+| Personal notes on query | No — Postgres FTS, then text injected into the think question | Indirect — LLM sees them as part of the prompt |
 
 **Query:** load chat history + this user's `app_memories` → call gbrain `think` (shared corpus) with personal memory injected into the question → store turn.
 
