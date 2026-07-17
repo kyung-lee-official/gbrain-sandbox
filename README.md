@@ -143,7 +143,7 @@ Copy `.env.example` to `.env` and fill in values (keep `.env` at the **repo root
 bun run setup:gbrain
 ```
 
-Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, read-only on shared), stores it in `app_gbrain_auth`, and seeds demo users Lily/Bob. Re-runs skip existing source/OAuth unless you pass `-- --force-oauth`.
+Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, `read`+`write` on shared — `write` is required for gbrain `think`), stores it in `app_gbrain_auth`, and seeds demo users Lily/Bob. Re-runs skip existing source/OAuth unless you pass `-- --force-oauth`.
 
 ### 4. Start gbrain (terminal 1)
 

@@ -125,7 +125,7 @@ async function ensureSharedOAuth(force: boolean): Promise<OAuthRegistration> {
 		"--grant-types",
 		"client_credentials",
 		"--scopes",
-		"read",
+		"read write",
 		"--source",
 		SHARED_SOURCE_ID,
 		"--federated-read",

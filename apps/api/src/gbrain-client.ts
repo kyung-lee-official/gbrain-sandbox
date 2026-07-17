@@ -41,7 +41,8 @@ async function fetchOAuthToken(auth: GbrainAuth): Promise<string> {
     grant_type: 'client_credentials',
     client_id: auth.oauth_client_id,
     client_secret: auth.oauth_client_secret,
-    scope: 'read',
+    // `think` is gated as write by gbrain (read covers search/query/get_page only).
+    scope: 'read write',
   });
 
   const res = await fetch(oauthTokenUrl(), {
