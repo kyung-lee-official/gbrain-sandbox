@@ -1,20 +1,23 @@
 # gbrain-sandbox
 
-Multi-user demo: Bun HTTP API with **shared knowledge in gbrain** and **personal memory in app Postgres**. No per-user git repos or per-user gbrain sources.
+Turborepo monorepo: Bun HTTP API (`apps/api`) with **shared knowledge in gbrain** and **personal memory in app Postgres**. Next.js frontend will live under `apps/web` later. No per-user git repos or per-user gbrain sources.
 
 ## Layout
 
 ```
 gbrain-sandbox/
-├── .env                    # gbrain + Bun (see .env.example)
-├── shared-source/          # Maintainer knowledge → one gbrain source
-├── server/                 # Bun API (users, chat, personal memory, gbrain client)
-├── scripts/setup-gbrain.ts # Register shared-source + one shared OAuth client
+├── apps/
+│   └── api/                # Bun HTTP API (@gbrain-sandbox/api)
+├── packages/
+│   └── typescript-config/  # Shared TSConfig
+├── shared-source/          # Maintainer knowledge → one gbrain source (repo root)
 ├── docs/API.md             # Bun HTTP API contract
+├── .env                    # gbrain + apps (see .env.example)
+├── turbo.json
 └── assets/                 # Images (optional)
 ```
 
-Only `shared-source/` is a nested git repo (required by `gbrain sync`). Personal memory does **not** use git or gbrain sources.
+Only `shared-source/` is a nested git repo (required by `gbrain sync`). Personal memory does **not** use git or gbrain sources. Keep `shared-source/` and `.env` at the **repo root** so project-scoped gbrain resolves them.
 
 ## Architecture
 
@@ -118,9 +121,17 @@ gbrain can run **globally** (`~/.gbrain`) or **per project** (`.env` + sources i
 bun install
 ```
 
+Uses Bun workspaces + Turborepo. From the repo root:
+
+| Script                 | What it runs                                |
+| ---------------------- | ------------------------------------------- |
+| `bun run dev:api`      | Bun API (`apps/api`)                        |
+| `bun run setup:gbrain` | Register shared-source + OAuth + demo users |
+| `bun run check-types`  | Typecheck workspace packages                |
+
 ### 2. Environment
 
-Copy `.env.example` to `.env` and fill in values.
+Copy `.env.example` to `.env` and fill in values (keep `.env` at the **repo root**).
 
 ### 3. Shared source + OAuth (one-time)
 
@@ -139,7 +150,7 @@ gbrain serve --http --port 3131
 ### 5. Start Bun API (terminal 2)
 
 ```bash
-bun run server
+bun run dev:api
 ```
 
 Listens on `http://localhost:3000` (override with `PORT`).
@@ -225,6 +236,7 @@ gbrain doctor
 
 ## Out of scope for this demo
 
+- Next.js UI (`apps/web` — planned)
 - Real user login / signup API (JWT); demo uses hardcoded API keys
 - Vector embeddings for personal memory (Postgres FTS + recent fallback)
 - Multiple sessions per user

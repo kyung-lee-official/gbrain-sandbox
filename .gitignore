@@ -1,5 +1,6 @@
-# bun
+# bun / turbo
 node_modules/
+.turbo/
 
 # Secrets
 .env

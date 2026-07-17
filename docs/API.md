@@ -12,7 +12,7 @@ All responses are JSON (`Content-Type: application/json`).
 | `POST /query`    | `Authorization: Bearer <api-key>` |
 | `POST /remember` | `Authorization: Bearer <api-key>` |
 
-Demo keys (after `bun run setup:gbrain`):
+Demo keys (after `bun run setup:gbrain` from the repo root):
 
 | User | API key         |
 | ---- | --------------- |

@@ -9,16 +9,17 @@ import {
 	DEMO_API_KEYS,
 	SHARED_OAUTH_CLIENT_NAME,
 	SHARED_SOURCE_ID,
-} from "../server/config.ts";
+} from "../src/config.ts";
 import {
 	closeDb,
 	getGbrainAuth,
 	migrate,
 	upsertGbrainAuth,
 	upsertUser,
-} from "../server/db.ts";
+} from "../src/db.ts";
 
-const REPO_ROOT = `${import.meta.dir}/..`;
+/** Monorepo root (apps/api/scripts → ../../..) — gbrain + shared-source live here. */
+const REPO_ROOT = `${import.meta.dir}/../../..`;
 
 type OAuthRegistration = {
 	clientId: string;
@@ -177,7 +178,7 @@ async function main(): Promise<void> {
 
 	console.log("\nSetup complete.");
 	console.log("Start gbrain: gbrain serve --http --port 3131");
-	console.log("Start API:    bun run server");
+	console.log("Start API:    bun run dev:api");
 	await closeDb();
 }
 

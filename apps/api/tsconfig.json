@@ -1,0 +1,7 @@
+{
+  "extends": "@gbrain-sandbox/typescript-config/base.json",
+  "compilerOptions": {
+    "types": ["bun"]
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@gbrain-sandbox/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../../.env run src/index.ts",
+    "setup:gbrain": "bun --env-file=../../.env run scripts/setup-gbrain.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@gbrain-sandbox/typescript-config": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5.9.2"
+  }
+}
