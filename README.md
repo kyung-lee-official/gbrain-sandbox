@@ -10,6 +10,7 @@ gbrain-sandbox/
 ├── shared-source/          # Maintainer knowledge → one gbrain source
 ├── server/                 # Bun API (users, chat, personal memory, gbrain client)
 ├── scripts/setup-gbrain.ts # Register shared-source + one shared OAuth client
+├── docs/API.md             # Bun HTTP API contract
 └── assets/                 # Images (optional)
 ```
 
@@ -84,12 +85,12 @@ flowchart TB
   Ollama --> Embs
 ```
 
-| Path | Embedding (Ollama) | LLM (DeepSeek) |
-| --- | --- | --- |
-| Maintainer `sync` / `embed` | Yes — embed shared chunks into the brain | No |
-| `POST /query` → gbrain `think` | Yes — retrieve shared chunks by embedding (+ hybrid) | Yes — synthesize the answer |
-| `POST /remember` | No — row in `app_memories` only | No |
-| Personal notes on query | No — Postgres FTS, then text injected into the think question | Indirect — LLM sees them as part of the prompt |
+| Path                           | Embedding (Ollama)                                            | LLM (DeepSeek)                                 |
+| ------------------------------ | ------------------------------------------------------------- | ---------------------------------------------- |
+| Maintainer `sync` / `embed`    | Yes — embed shared chunks into the brain                      | No                                             |
+| `POST /query` → gbrain `think` | Yes — retrieve shared chunks by embedding (+ hybrid)          | Yes — synthesize the answer                    |
+| `POST /remember`               | No — row in `app_memories` only                               | No                                             |
+| Personal notes on query        | No — Postgres FTS, then text injected into the think question | Indirect — LLM sees them as part of the prompt |
 
 **Query:** load chat history + this user's `app_memories` → call gbrain `think` (shared corpus) with personal memory injected into the question → store turn.
 
@@ -143,7 +144,7 @@ bun run server
 
 Listens on `http://localhost:3000` (override with `PORT`).
 
-## API (demo auth)
+## Bun API (demo auth)
 
 | Endpoint         | Auth                                                    | Body                   |
 | ---------------- | ------------------------------------------------------- | ---------------------- |
@@ -151,32 +152,7 @@ Listens on `http://localhost:3000` (override with `PORT`).
 | `POST /query`    | `Authorization: Bearer demo-key-lily` or `demo-key-bob` | `{ "message": "..." }` |
 | `POST /remember` | same                                                    | `{ "content": "..." }` |
 
-### Examples
-
-```bash
-# Shared knowledge via gbrain think
-curl -s -X POST http://localhost:3000/query \
-  -H "Authorization: Bearer demo-key-lily" \
-  -H "Content-Type: application/json" \
-  -d "{\"message\":\"What is the sandbox verification protocol codename?\"}"
-
-# Personal memory (app Postgres, Lily only)
-curl -s -X POST http://localhost:3000/remember \
-  -H "Authorization: Bearer demo-key-lily" \
-  -H "Content-Type: application/json" \
-  -d "{\"content\":\"My favorite coffee is oat latte.\"}"
-
-curl -s -X POST http://localhost:3000/query \
-  -H "Authorization: Bearer demo-key-lily" \
-  -H "Content-Type: application/json" \
-  -d "{\"message\":\"What is my favorite coffee?\"}"
-
-# Bob cannot see Lily's app_memories
-curl -s -X POST http://localhost:3000/query \
-  -H "Authorization: Bearer demo-key-bob" \
-  -H "Content-Type: application/json" \
-  -d "{\"message\":\"What is Lily favorite coffee?\"}"
-```
+Request/response shapes, errors, and curl examples: [`docs/API.md`](docs/API.md).
 
 ## Maintainer workflow (shared only)
 
@@ -196,6 +172,8 @@ gbrain embed --stale
 | `app_memories`    | Personal notes (`user_id` + `slug` + `content`) |
 | `app_sessions`    | One active thread per user                      |
 | `app_messages`    | Chat history                                    |
+
+**`slug`:** short unique id for one memory note per user (e.g. `memory/note-1729123456789`). Auto-assigned on `POST /remember`; same slug for that user updates the row. Injected into the think prompt as `[slug]` for reference.
 
 ```sql
 SELECT id, api_key FROM app_users;
