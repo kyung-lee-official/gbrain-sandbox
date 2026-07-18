@@ -10,7 +10,9 @@ import {
   searchMemoriesByUser,
   seedDemoUsersIfEmpty,
 } from './db.ts';
-import { gbrainThink } from './gbrain-client.ts';
+import { gbrainQuery, gbrainSearch, gbrainThink } from './gbrain-client.ts';
+
+export type AskMode = 'think' | 'query' | 'search';
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -31,13 +33,19 @@ async function resolveUser(req: Request) {
   return getUserByApiKey(apiKey);
 }
 
+function parseAskMode(raw: unknown): AskMode | null {
+  if (raw === undefined || raw === null || raw === '') return 'think';
+  if (raw === 'think' || raw === 'query' || raw === 'search') return raw;
+  return null;
+}
+
 async function handleQuery(req: Request): Promise<Response> {
   const user = await resolveUser(req);
   if (!user) return unauthorized();
 
-  let body: { message?: string };
+  let body: { message?: string; mode?: string };
   try {
-    body = (await req.json()) as { message?: string };
+    body = (await req.json()) as { message?: string; mode?: string };
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
@@ -45,25 +53,48 @@ async function handleQuery(req: Request): Promise<Response> {
   const message = body.message?.trim();
   if (!message) return json({ error: 'message is required' }, 400);
 
-  const sessionId = await getOrCreateSession(user.id);
-  const recent = await listRecentMessages(sessionId);
-  const personalMemories = await searchMemoriesByUser(user.id, message);
-  const question = buildThinkQuestion(recent, message, personalMemories);
+  const mode = parseAskMode(body.mode);
+  if (!mode) {
+    return json({ error: "mode must be 'think', 'query', or 'search'" }, 400);
+  }
 
   let answer: string;
   try {
-    answer = await gbrainThink(question);
+    switch (mode) {
+      case 'search':
+        answer = await gbrainSearch(message);
+        break;
+      case 'query':
+        answer = await gbrainQuery(message);
+        break;
+      case 'think': {
+        const sessionId = await getOrCreateSession(user.id);
+        const recent = await listRecentMessages(sessionId);
+        const personalMemories = await searchMemoriesByUser(user.id, message);
+        const question = buildThinkQuestion(recent, message, personalMemories);
+        answer = await gbrainThink(question);
+        await insertMessage(sessionId, 'user', message);
+        await insertMessage(sessionId, 'assistant', answer);
+        return json({
+          userId: user.id,
+          sessionId,
+          mode,
+          answer,
+        });
+      }
+      default: {
+        const _exhaustive: never = mode;
+        return _exhaustive;
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return json({ error: msg }, 502);
   }
 
-  await insertMessage(sessionId, 'user', message);
-  await insertMessage(sessionId, 'assistant', answer);
-
   return json({
     userId: user.id,
-    sessionId,
+    mode,
     answer,
   });
 }

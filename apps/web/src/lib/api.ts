@@ -35,22 +35,32 @@ export async function getHealth(): Promise<{ ok: boolean; error?: string }> {
   }
 }
 
+export type AskMode = "think" | "query" | "search";
+
 export async function postQuery(
   apiKey: string,
   message: string,
-): Promise<{ userId?: string; sessionId?: string; answer?: string; error?: string }> {
+  mode: AskMode = "think",
+): Promise<{
+  userId?: string;
+  sessionId?: string;
+  mode?: AskMode;
+  answer?: string;
+  error?: string;
+}> {
   const res = await fetch(`${apiBaseUrl()}/query`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, mode }),
     cache: "no-store",
   });
   const data = (await parseJson(res)) as {
     userId?: string;
     sessionId?: string;
+    mode?: AskMode;
     answer?: string;
     error?: string;
   } | null;

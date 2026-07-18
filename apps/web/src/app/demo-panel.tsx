@@ -1,30 +1,40 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { AskMode } from "@/lib/api";
 import { submitQuery, submitRemember } from "./actions";
+import { ResponseView, type ApiPayload } from "./response-view";
 
 type DemoUser = "lily" | "bob";
 
+const MODE_HELP: Record<AskMode, string> = {
+  think: "gbrain think — LLM synthesis + citations (uses chat + personal memory)",
+  query: "gbrain query — hybrid retrieval (vector + keyword), no LLM",
+  search: "gbrain search — keyword / BM25 retrieval, no LLM",
+};
+
 export function DemoPanel() {
   const [user, setUser] = useState<DemoUser>("lily");
-  const [result, setResult] = useState<string>("");
+  const [mode, setMode] = useState<AskMode>("think");
+  const [payload, setPayload] = useState<ApiPayload | null>(null);
   const [pending, startTransition] = useTransition();
 
   function onRemember(formData: FormData) {
     formData.set("user", user);
     startTransition(async () => {
-      setResult("");
+      setPayload(null);
       const res = await submitRemember(formData);
-      setResult(JSON.stringify(res, null, 2));
+      setPayload(res);
     });
   }
 
   function onQuery(formData: FormData) {
     formData.set("user", user);
+    formData.set("mode", mode);
     startTransition(async () => {
-      setResult("");
+      setPayload(null);
       const res = await submitQuery(formData);
-      setResult(JSON.stringify(res, null, 2));
+      setPayload(res);
     });
   }
 
@@ -58,8 +68,20 @@ export function DemoPanel() {
       </form>
 
       <form action={onQuery} className="card">
-        <h2>Query</h2>
-        <p>POST /query — shared gbrain + personal memory</p>
+        <h2>Ask</h2>
+        <p>POST /query — {MODE_HELP[mode]}</p>
+        <label className="field">
+          <span>Mode</span>
+          <select
+            value={mode}
+            onChange={(e) => setMode(e.target.value as AskMode)}
+            disabled={pending}
+          >
+            <option value="think">think</option>
+            <option value="query">query</option>
+            <option value="search">search</option>
+          </select>
+        </label>
         <textarea
           name="message"
           rows={3}
@@ -72,10 +94,7 @@ export function DemoPanel() {
         </button>
       </form>
 
-      <section className="card">
-        <h2>Response</h2>
-        <pre>{pending ? "Calling Bun API…" : result || "—"}</pre>
-      </section>
+      <ResponseView pending={pending} payload={payload} />
     </div>
   );
 }

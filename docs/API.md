@@ -39,41 +39,63 @@ Liveness check. No auth.
 
 ### `POST /query`
 
-Ask a question using shared gbrain knowledge plus this user's personal memories and recent chat.
+Ask against shared gbrain knowledge. Optional `mode` selects the gbrain tool.
 
 **Request**
 
 ```json
-{ "message": "What is the sandbox verification protocol codename?" }
+{
+  "message": "What is the sandbox verification protocol codename?",
+  "mode": "think"
+}
 ```
 
-| Field     | Required | Notes                  |
-| --------- | -------- | ---------------------- |
-| `message` | yes      | Trimmed; empty → `400` |
+| Field     | Required | Notes                                                                 |
+| --------- | -------- | --------------------------------------------------------------------- |
+| `message` | yes      | Trimmed; empty → `400`                                                |
+| `mode`    | no       | `think` (default), `query` (hybrid retrieval), or `search` (keyword) |
 
-**200**
+| Mode     | gbrain tool | Behavior                                                                 |
+| -------- | ----------- | ------------------------------------------------------------------------ |
+| `think`  | `think`     | LLM synthesis; injects chat history + personal memories; stores the turn |
+| `query`  | `query`     | Hybrid retrieval only (no LLM, no chat write)                            |
+| `search` | `search`    | Keyword / BM25 retrieval only (no LLM, no chat write)                    |
+
+**200** (`mode: "think"`)
 
 ```json
 {
   "userId": "lily",
   "sessionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "mode": "think",
   "answer": "..."
 }
 ```
 
-| Field       | Meaning                                        |
-| ----------- | ---------------------------------------------- |
-| `userId`    | Authenticated user                             |
-| `sessionId` | Active chat thread (one per user in this demo) |
-| `answer`    | gbrain `think` synthesis                       |
+**200** (`mode: "query"` or `"search"`)
+
+```json
+{
+  "userId": "lily",
+  "mode": "query",
+  "answer": "..."
+}
+```
+
+| Field       | Meaning                                                      |
+| ----------- | ------------------------------------------------------------ |
+| `userId`    | Authenticated user                                           |
+| `sessionId` | Present for `think` only (one active thread per user)        |
+| `mode`      | Echo of the selected mode                                    |
+| `answer`    | Synthesis text (`think`) or retrieval payload (`query`/`search`) |
 
 **Errors**
 
-| Status | When                                                     |
-| ------ | -------------------------------------------------------- |
-| `400`  | Invalid JSON, or `message` missing/empty                 |
-| `401`  | Missing/invalid Bearer token                             |
-| `502`  | gbrain OAuth/MCP/`think` failed (`error` is the message) |
+| Status | When                                                              |
+| ------ | ----------------------------------------------------------------- |
+| `400`  | Invalid JSON, empty `message`, or invalid `mode`                  |
+| `401`  | Missing/invalid Bearer token                                      |
+| `502`  | gbrain OAuth/MCP tool failed (`error` is the message)             |
 
 ### `POST /remember`
 
@@ -122,11 +144,23 @@ Save a personal note for the authenticated user only (`app_memories`). Does not 
 # Health
 curl -s http://localhost:3000/health
 
-# Shared knowledge via gbrain think
+# think (default) — LLM synthesis
 curl -s -X POST http://localhost:3000/query \
   -H "Authorization: Bearer demo-key-lily" \
   -H "Content-Type: application/json" \
-  -d "{\"message\":\"What is the sandbox verification protocol codename?\"}"
+  -d "{\"message\":\"What is the sandbox verification protocol codename?\",\"mode\":\"think\"}"
+
+# query — hybrid retrieval (no LLM)
+curl -s -X POST http://localhost:3000/query \
+  -H "Authorization: Bearer demo-key-lily" \
+  -H "Content-Type: application/json" \
+  -d "{\"message\":\"What passphrase unlocks the sandbox test vault?\",\"mode\":\"query\"}"
+
+# search — keyword retrieval (no LLM)
+curl -s -X POST http://localhost:3000/query \
+  -H "Authorization: Bearer demo-key-lily" \
+  -H "Content-Type: application/json" \
+  -d "{\"message\":\"cerulean-moth\",\"mode\":\"search\"}"
 
 # Personal memory (app Postgres, Lily only)
 curl -s -X POST http://localhost:3000/remember \

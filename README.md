@@ -206,7 +206,7 @@ SELECT role, left(content, 80) FROM app_messages ORDER BY created_at DESC LIMIT 
 
 ## Test demo (local only)
 
-`shared-source/test-demo.md` is gitignored. Copy the block below into that file, commit inside `shared-source/`, then `gbrain sync --source shared-source`.
+`shared-source/test-demo.md` is gitignored from the monorepo root (it lives in the nested `shared-source` git repo). Copy the block below into that file, commit inside `shared-source/`, then `gbrain sync --source shared-source`.
 
 ```markdown
 ---
@@ -223,6 +223,8 @@ A: Project Luminous Fern.
 **Q: What passphrase unlocks the sandbox test vault?**  
 A: cerulean-moth-7742.
 ```
+
+Note: gbrain `think` currently truncates each gathered page to ~600 characters for the LLM ([gbrain#2369](https://github.com/garrytan/gbrain/issues/2369)). Prefer `gbrain query` / `get` for checking that a fact is on the page; `POST /query` may miss facts below that excerpt until gbrain raises the limit.
 
 ## Env vars
 

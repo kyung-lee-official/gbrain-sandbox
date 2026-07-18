@@ -136,3 +136,129 @@ pre {
   font-size: 0.8rem;
   line-height: 1.4;
 }
+
+.response-card {
+  gap: 0.85rem;
+}
+
+.readable {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.readable-prose {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.readable-prose p {
+  margin: 0;
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.readable-prose code,
+.hit-slug {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.readable-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.readable-gaps h3 {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.readable-gaps ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.response-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.hit-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.hit {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: var(--bg);
+}
+
+.hit-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.75rem;
+}
+
+.hit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.hit-body {
+  max-height: 14rem;
+  overflow: auto;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.raw-block {
+  border-top: 1px solid var(--border);
+  padding-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.raw-block h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: normal;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.raw-json {
+  margin: 0;
+  max-height: 10rem;
+  overflow: auto;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}

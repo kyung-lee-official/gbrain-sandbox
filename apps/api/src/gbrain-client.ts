@@ -2,7 +2,11 @@ import { chatModel, mcpUrl, oauthTokenUrl } from './config.ts';
 import { getGbrainAuth, type GbrainAuth } from './db.ts';
 
 const MCP_PROTOCOL = '2024-11-05';
-let tokenCache: { accessToken: string; expiresAt: number } | null = null;
+let tokenCache: {
+  accessToken: string;
+  expiresAt: number;
+  clientId: string;
+} | null = null;
 
 type JsonRpcResponse = {
   jsonrpc?: string;
@@ -34,8 +38,18 @@ async function resolveAuth(): Promise<GbrainAuth> {
   return auth;
 }
 
-async function fetchOAuthToken(auth: GbrainAuth): Promise<string> {
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 30_000) return tokenCache.accessToken;
+async function fetchOAuthToken(
+  auth: GbrainAuth,
+  opts?: { forceRefresh?: boolean },
+): Promise<string> {
+  if (
+    !opts?.forceRefresh &&
+    tokenCache &&
+    tokenCache.clientId === auth.oauth_client_id &&
+    tokenCache.expiresAt > Date.now() + 30_000
+  ) {
+    return tokenCache.accessToken;
+  }
 
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
@@ -61,6 +75,7 @@ async function fetchOAuthToken(auth: GbrainAuth): Promise<string> {
   tokenCache = {
     accessToken: json.access_token,
     expiresAt: Date.now() + expiresIn * 1000,
+    clientId: auth.oauth_client_id,
   };
   return json.access_token;
 }
@@ -95,8 +110,8 @@ async function mcpRequest(
 }
 
 async function openMcpSession(auth: GbrainAuth): Promise<string | undefined> {
-  const accessToken = await fetchOAuthToken(auth);
-  const res = await fetch(mcpUrl(), {
+  let accessToken = await fetchOAuthToken(auth);
+  let res = await fetch(mcpUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -114,6 +129,31 @@ async function openMcpSession(auth: GbrainAuth): Promise<string | undefined> {
       },
     }),
   });
+
+  // After `setup:gbrain --force-oauth`, an in-memory token from the revoked
+  // client must be dropped and reissued.
+  if (res.status === 401) {
+    accessToken = await fetchOAuthToken(auth, { forceRefresh: true });
+    res = await fetch(mcpUrl(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: MCP_PROTOCOL,
+          capabilities: {},
+          clientInfo: { name: 'gbrain-sandbox-bun', version: '2.0.0' },
+        },
+      }),
+    });
+  }
+
   const sessionId = res.headers.get('mcp-session-id') ?? res.headers.get('Mcp-Session-Id') ?? undefined;
   if (!res.ok) {
     const text = await res.text();
@@ -125,7 +165,7 @@ async function openMcpSession(auth: GbrainAuth): Promise<string | undefined> {
   return sessionId;
 }
 
-function extractToolText(result: unknown): string {
+function extractToolText(result: unknown, opts?: { preferAnswer?: boolean }): string {
   if (!result || typeof result !== 'object') return JSON.stringify(result);
   const r = result as { content?: Array<{ type?: string; text?: string }>; structuredContent?: unknown };
   if (Array.isArray(r.content)) {
@@ -134,34 +174,57 @@ function extractToolText(result: unknown): string {
       .map((c) => c.text as string);
     if (parts.length > 0) {
       const joined = parts.join('\n');
-      try {
-        const parsed = JSON.parse(joined) as { answer?: string };
-        if (typeof parsed.answer === 'string' && parsed.answer.trim()) return parsed.answer.trim();
-      } catch {
-        // not JSON — return raw text
+      if (opts?.preferAnswer) {
+        try {
+          const parsed = JSON.parse(joined) as { answer?: string };
+          if (typeof parsed.answer === 'string' && parsed.answer.trim()) return parsed.answer.trim();
+        } catch {
+          // not JSON — return raw text
+        }
       }
-      return joined;
+      try {
+        return JSON.stringify(JSON.parse(joined), null, 2);
+      } catch {
+        return joined;
+      }
     }
   }
   if (r.structuredContent !== undefined) return JSON.stringify(r.structuredContent, null, 2);
   return JSON.stringify(result, null, 2);
 }
 
-/** Call gbrain `think` against the shared corpus via the app OAuth client. */
-export async function gbrainThink(question: string): Promise<string> {
+async function callGbrainTool(
+  name: string,
+  arguments_: Record<string, unknown>,
+): Promise<unknown> {
   const auth = await resolveAuth();
   const sessionId = await openMcpSession(auth);
+  return mcpRequest(
+    auth,
+    'tools/call',
+    { name, arguments: arguments_ },
+    sessionId,
+  );
+}
+
+/** Keyword retrieval (BM25 / tsvector). No LLM. */
+export async function gbrainSearch(query: string): Promise<string> {
+  const result = await callGbrainTool('search', { query });
+  return extractToolText(result);
+}
+
+/** Hybrid retrieval (vector + keyword). No LLM. */
+export async function gbrainQuery(query: string): Promise<string> {
+  const result = await callGbrainTool('query', { query });
+  return extractToolText(result);
+}
+
+/** Call gbrain `think` against the shared corpus via the app OAuth client. */
+export async function gbrainThink(question: string): Promise<string> {
   const model = chatModel();
   const arguments_: Record<string, string> = { question };
   if (model) arguments_.model = model;
-  const result = await mcpRequest(
-    auth,
-    'tools/call',
-    {
-      name: 'think',
-      arguments: arguments_,
-    },
-    sessionId,
-  );
-  return extractToolText(result);
+  const result = await callGbrainTool('think', arguments_);
+  return extractToolText(result, { preferAnswer: true });
 }
+
