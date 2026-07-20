@@ -21,6 +21,3 @@ Thumbs.db
 
 # Nested git for shared-source (gbrain sync requires a git repo at the source path)
 shared-source/.git/
-
-# Local test page (copy from README)
-shared-source/test-demo.md

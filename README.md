@@ -86,12 +86,12 @@ flowchart TB
   Ollama --> Embs
 ```
 
-| Path                           | Embedding (Ollama)                                            | LLM (DeepSeek)                                 |
-| ------------------------------ | ------------------------------------------------------------- | ---------------------------------------------- |
-| Maintainer `sync` / `embed`    | Yes — embed shared chunks into the brain                      | No                                             |
-| `POST /query` mode `think` | Yes — hybrid retrieve embeds the question     | Yes — Bun calls DeepSeek with full page(s)     |
-| `POST /remember`               | No — row in `app_memories` only                               | No                                             |
-| Personal notes on query        | No — Postgres FTS, then text injected into the synthesis prompt | Indirect — LLM sees them as part of the prompt |
+| Path                        | Embedding (Ollama)                                              | LLM (DeepSeek)                                 |
+| --------------------------- | --------------------------------------------------------------- | ---------------------------------------------- |
+| Maintainer `sync` / `embed` | Yes — embed shared chunks into the brain                        | No                                             |
+| `POST /query` mode `think`  | Yes — hybrid retrieve embeds the question                       | Yes — Bun calls DeepSeek with full page(s)     |
+| `POST /remember`            | No — row in `app_memories` only                                 | No                                             |
+| Personal notes on query     | No — Postgres FTS, then text injected into the synthesis prompt | Indirect — LLM sees them as part of the prompt |
 
 **Think mode:** load chat history + this user's `app_memories` → gbrain `query` (hybrid) → score-based slug selection → `get_page` for each slug (full body) → Bun synthesizes with DeepSeek → store turn.
 
@@ -174,7 +174,7 @@ Request/response shapes, errors, and curl examples: [`docs/API.md`](docs/API.md)
 
 ## Maintainer workflow (shared only)
 
-Add markdown under `shared-source/`, commit in that nested repo, then:
+Add or edit markdown under `shared-source/` (tracked in this monorepo). Also commit inside the nested `shared-source/` git repo so `gbrain sync` picks up the change, then:
 
 ```bash
 gbrain sync --source shared-source
@@ -199,45 +199,47 @@ SELECT user_id, slug, left(content, 80) FROM app_memories ORDER BY created_at DE
 SELECT role, left(content, 80) FROM app_messages ORDER BY created_at DESC LIMIT 10;
 ```
 
-## Test demo (local only)
+## Test demo
 
-`shared-source/test-demo.md` is gitignored from the monorepo root (it lives in the nested `shared-source` git repo). Copy the block below into that file, commit inside `shared-source/`, then `gbrain sync --source shared-source`.
+Demo markdown under `shared-source/` is tracked in this repo. `shared-source/` is also a nested git repo (required by `gbrain sync`; only `shared-source/.git/` is ignored at the monorepo root). After editing pages:
 
-```markdown
----
-title: Sandbox demo (testing only)
-type: note
-tags: [demo, testing]
----
-
-# Sandbox demo (testing only)
-
-**Q: What is the codename of the sandbox verification protocol?**  
-A: Project Luminous Fern.
-
-**Q: What passphrase unlocks the sandbox test vault?**  
-A: cerulean-moth-7742.
+```bash
+gbrain sync --source shared-source
+gbrain embed --stale
 ```
+
+**Single-file checks** (`test-demo.md`): protocol codename, vault passphrase, Chief Archivist, etc.
+
+**Cross-file hydrate** — answer is split across three pages:
+
+| File                  | Fact                                    |
+| --------------------- | --------------------------------------- |
+| `north-quay-relay.md` | callsign `ORION-LATCH` (Pier 7)         |
+| `duty-roster.md`      | color token `violet-green` (Mira Quill) |
+| `heptagon-watch.md`   | watch count `7`                         |
+
+Ask in **think** mode: _What is the full arming formula for the North Quay Relay?_  
+Expected: `ORION-LATCH/violet-green/7`. API console logs every `query` hit (score, ratio vs top, factors) and marks hydrate-selected slugs.
 
 Note: gbrain MCP `think` truncates gathered pages to ~600 characters for its internal LLM ([#2369](https://github.com/garrytan/gbrain/issues/2369)). This sandbox **think mode** avoids that by using `query` + `get_page` + Bun-side DeepSeek synthesis instead.
 
 ## Env vars
 
-| Variable                      | Purpose                                                    |
-| ----------------------------- | ---------------------------------------------------------- |
-| `GBRAIN_DATABASE_URL`         | gbrain + default app DB                                    |
-| `APP_DATABASE_URL`            | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`) |
-| `DEEPSEEK_API_KEY`            | Bun think-mode synthesis (DeepSeek API)                    |
+| Variable                      | Purpose                                                        |
+| ----------------------------- | -------------------------------------------------------------- |
+| `GBRAIN_DATABASE_URL`         | gbrain + default app DB                                        |
+| `APP_DATABASE_URL`            | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`)     |
+| `DEEPSEEK_API_KEY`            | Bun think-mode synthesis (DeepSeek API)                        |
 | `GBRAIN_CHAT_MODEL`           | Default synthesis model id (e.g. `deepseek:deepseek-v4-flash`) |
-| `HYDRATE_SCORE_RATIO`         | Min score vs top hit to include a page (e.g. `0.65`)       |
-| `HYDRATE_MAX_PAGES`           | Max pages to load per think request (e.g. `5`)             |
-| `HYDRATE_MAX_CHARS_PER_PAGE`  | Max chars per hydrated page (e.g. `8000`)                  |
-| `HYDRATE_MAX_TOTAL_CHARS`     | Max total hydrated chars per think request (e.g. `24000`)  |
-| `GBRAIN_EMBEDDING_MODEL`      | e.g. `ollama:nomic-embed-text`                             |
-| `GBRAIN_EMBEDDING_DIMENSIONS` | e.g. `768`                                                 |
-| `GBRAIN_MCP_BASE_URL`         | Default `http://localhost:3131`                            |
-| `PORT`                        | Bun API port (default `3000`)                              |
-| `API_URL`                     | Next.js → Bun base URL (default `http://localhost:3000`)   |
+| `HYDRATE_SCORE_RATIO`         | Min score vs top hit to include a page (e.g. `0.65`)           |
+| `HYDRATE_MAX_PAGES`           | Max pages to load per think request (e.g. `5`)                 |
+| `HYDRATE_MAX_CHARS_PER_PAGE`  | Max chars per hydrated page (e.g. `8000`)                      |
+| `HYDRATE_MAX_TOTAL_CHARS`     | Max total hydrated chars per think request (e.g. `24000`)      |
+| `GBRAIN_EMBEDDING_MODEL`      | e.g. `ollama:nomic-embed-text`                                 |
+| `GBRAIN_EMBEDDING_DIMENSIONS` | e.g. `768`                                                     |
+| `GBRAIN_MCP_BASE_URL`         | Default `http://localhost:3131`                                |
+| `PORT`                        | Bun API port (default `3000`)                                  |
+| `API_URL`                     | Next.js → Bun base URL (default `http://localhost:3000`)       |
 
 ## gbrain CLI (direct)
 

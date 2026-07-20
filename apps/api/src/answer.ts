@@ -4,6 +4,7 @@ import { synthesizeAnswer } from "./chat-client.ts";
 import { gbrainGetPage, gbrainQueryHits } from "./gbrain-client.ts";
 import {
 	hydrateConfigFromEnv,
+	logRetrievalHits,
 	parseRetrievalHits,
 	selectSlugsForHydrate,
 } from "./retrieval.ts";
@@ -18,6 +19,7 @@ export async function answerWithHydratedPages(
 	const hits = parseRetrievalHits(hitsRaw);
 	const config = hydrateConfigFromEnv();
 	const slugs = selectSlugsForHydrate(hits, config);
+	logRetrievalHits("think hydrate", userMessage, hits, slugs);
 
 	const sharedPages: Array<{ slug: string; title?: string; body: string }> = [];
 	let totalChars = 0;

@@ -2,6 +2,8 @@ export type RetrievalHit = {
 	slug: string;
 	score: number;
 	title?: string;
+	/** Extra numeric fields from gbrain (e.g. base_score, vector/keyword factors). */
+	factors: Record<string, number>;
 };
 
 export type HydrateSelectionConfig = {
@@ -33,6 +35,7 @@ export function parseRetrievalHits(raw: unknown): RetrievalHit[] {
 		const row = item as Record<string, unknown>;
 		const slug = typeof row.slug === "string" ? row.slug.trim() : "";
 		if (!slug) continue;
+		const factors = numericFactorsFromRow(row);
 		const score =
 			typeof row.score === "number"
 				? row.score
@@ -42,10 +45,39 @@ export function parseRetrievalHits(raw: unknown): RetrievalHit[] {
 		const title = typeof row.title === "string" ? row.title : undefined;
 		const prev = bySlug.get(slug);
 		if (!prev || score > prev.score) {
-			bySlug.set(slug, { slug, score, title });
+			bySlug.set(slug, { slug, score, title, factors });
 		}
 	}
 	return [...bySlug.values()].sort((a, b) => b.score - a.score);
+}
+
+/** Log ranked query hits (score + any extra factors) to the API console. */
+export function logRetrievalHits(
+	label: string,
+	query: string,
+	hits: RetrievalHit[],
+	selectedSlugs?: string[],
+): void {
+	const selected = selectedSlugs ? new Set(selectedSlugs) : null;
+	console.log(`[query hits] ${label} q=${JSON.stringify(query)} n=${hits.length}`);
+	if (hits.length === 0) {
+		console.log("  (no hits)");
+		return;
+	}
+	const topScore = hits[0]?.score ?? 0;
+	for (const [i, hit] of hits.entries()) {
+		const ratio =
+			topScore > 0 ? (hit.score / topScore).toFixed(3) : "n/a";
+		const mark = selected?.has(hit.slug) ? " selected" : "";
+		const factorParts = Object.entries(hit.factors)
+			.filter(([key]) => key !== "score")
+			.map(([key, value]) => `${key}=${formatScore(value)}`)
+			.join(" ");
+		const title = hit.title ? ` title=${JSON.stringify(hit.title)}` : "";
+		console.log(
+			`  #${i + 1} score=${formatScore(hit.score)} ratio=${ratio}${mark} slug=${hit.slug}${title}${factorParts ? ` ${factorParts}` : ""}`,
+		);
+	}
 }
 
 /** Pick slugs by relative score threshold, capped by page count and char budget. */
@@ -68,6 +100,20 @@ export function selectSlugsForHydrate(
 		if (totalChars >= config.maxTotalChars) break;
 	}
 	return selected;
+}
+
+function numericFactorsFromRow(row: Record<string, unknown>): Record<string, number> {
+	const factors: Record<string, number> = {};
+	for (const [key, value] of Object.entries(row)) {
+		if (typeof value === "number" && Number.isFinite(value)) {
+			factors[key] = value;
+		}
+	}
+	return factors;
+}
+
+function formatScore(n: number): string {
+	return Number.isInteger(n) ? String(n) : n.toFixed(4);
 }
 
 function readRequiredFloatEnv(name: string): number {

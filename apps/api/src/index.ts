@@ -11,7 +11,8 @@ import {
   seedDemoUsersIfEmpty,
 } from './db.ts';
 import { answerWithHydratedPages } from './answer.ts';
-import { gbrainQuery, gbrainSearch } from './gbrain-client.ts';
+import { gbrainQueryHits, gbrainSearch } from './gbrain-client.ts';
+import { logRetrievalHits, parseRetrievalHits } from './retrieval.ts';
 
 export type AskMode = 'think' | 'query' | 'search';
 
@@ -65,9 +66,16 @@ async function handleQuery(req: Request): Promise<Response> {
       case 'search':
         answer = await gbrainSearch(message);
         break;
-      case 'query':
-        answer = await gbrainQuery(message);
+      case 'query': {
+        const hitsRaw = await gbrainQueryHits(message);
+        const hits = parseRetrievalHits(hitsRaw);
+        logRetrievalHits('query mode', message, hits);
+        answer =
+          typeof hitsRaw === 'string'
+            ? hitsRaw
+            : JSON.stringify(hitsRaw, null, 2);
         break;
+      }
       case 'think': {
         const sessionId = await getOrCreateSession(user.id);
         const recent = await listRecentMessages(sessionId);
