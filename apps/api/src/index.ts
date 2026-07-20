@@ -1,4 +1,4 @@
-import { buildThinkQuestion, slugForMemoryNote } from './context.ts';
+import { slugForMemoryNote } from './context.ts';
 import { serverPort } from './config.ts';
 import {
   getOrCreateSession,
@@ -10,7 +10,8 @@ import {
   searchMemoriesByUser,
   seedDemoUsersIfEmpty,
 } from './db.ts';
-import { gbrainQuery, gbrainSearch, gbrainThink } from './gbrain-client.ts';
+import { answerWithHydratedPages } from './answer.ts';
+import { gbrainQuery, gbrainSearch } from './gbrain-client.ts';
 
 export type AskMode = 'think' | 'query' | 'search';
 
@@ -71,8 +72,7 @@ async function handleQuery(req: Request): Promise<Response> {
         const sessionId = await getOrCreateSession(user.id);
         const recent = await listRecentMessages(sessionId);
         const personalMemories = await searchMemoriesByUser(user.id, message);
-        const question = buildThinkQuestion(recent, message, personalMemories);
-        answer = await gbrainThink(question);
+        answer = await answerWithHydratedPages(recent, message, personalMemories);
         await insertMessage(sessionId, 'user', message);
         await insertMessage(sessionId, 'assistant', answer);
         return json({

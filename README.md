@@ -42,7 +42,7 @@ flowchart TB
     Query["POST /query"]
     Mem[(app_memories FTS)]
     Chat[(app_sessions / app_messages)]
-    Build[Build think question<br/>chat + personal notes]
+    Build[Build synthesis prompt<br/>chat + personal notes + full pages]
   end
 
   subgraph maintainer [Maintainer — offline]
@@ -51,14 +51,12 @@ flowchart TB
   end
 
   subgraph gbrain [gbrain serve --http :3131]
-    Think[think tool]
-    Retrieve[Hybrid retrieve<br/>uses chunk embeddings]
-    Synth[LLM synthesis]
+    Retrieve[query + get_page<br/>hybrid retrieve + full pages]
   end
 
   subgraph models [Models]
     Ollama["Ollama nomic-embed-text<br/>EMBEDDING"]
-    DeepSeek["DeepSeek via GBRAIN_CHAT_MODEL<br/>LLM"]
+    DeepSeek["DeepSeek via Bun<br/>LLM synthesis"]
   end
 
   subgraph store [Postgres brain]
@@ -76,14 +74,11 @@ flowchart TB
   Query --> Chat
   Query --> Mem
   Query --> Build
-  Build --> Think
-
-  Think --> Retrieve
+  Build --> Retrieve
   Retrieve --> Pages
   Retrieve --> Embs
-  Think --> Synth
-  Synth --> DeepSeek
-  Synth --> Chat
+  Build --> DeepSeek
+  DeepSeek --> Chat
 
   MD --> Sync
   Sync --> Pages
@@ -94,17 +89,17 @@ flowchart TB
 | Path                           | Embedding (Ollama)                                            | LLM (DeepSeek)                                 |
 | ------------------------------ | ------------------------------------------------------------- | ---------------------------------------------- |
 | Maintainer `sync` / `embed`    | Yes — embed shared chunks into the brain                      | No                                             |
-| `POST /query` → gbrain `think` | Yes — retrieve shared chunks by embedding (+ hybrid)          | Yes — synthesize the answer                    |
+| `POST /query` mode `think` | Yes — hybrid retrieve embeds the question     | Yes — Bun calls DeepSeek with full page(s)     |
 | `POST /remember`               | No — row in `app_memories` only                               | No                                             |
-| Personal notes on query        | No — Postgres FTS, then text injected into the think question | Indirect — LLM sees them as part of the prompt |
+| Personal notes on query        | No — Postgres FTS, then text injected into the synthesis prompt | Indirect — LLM sees them as part of the prompt |
 
-**Query:** load chat history + this user's `app_memories` → call gbrain `think` (shared corpus) with personal memory injected into the question → store turn.
+**Think mode:** load chat history + this user's `app_memories` → gbrain `query` (hybrid) → score-based slug selection → `get_page` for each slug (full body) → Bun synthesizes with DeepSeek → store turn.
 
 **Remember:** insert into `app_memories` for `user_id` only.
 
 **New user:** insert `app_users` row → ready. No `sources add`, no `git init`, no OAuth client per user.
 
-At scale, user count grows **rows** in `app_memories`, not filesystem repos or gbrain sources. Isolation is a hard `user_id` filter. One app-level OAuth client calls gbrain `think`.
+At scale, user count grows **rows** in `app_memories`, not filesystem repos or gbrain sources. Isolation is a hard `user_id` filter. One app-level OAuth client calls gbrain `query` / `get_page` (read scope).
 
 ## Prerequisites
 
@@ -143,7 +138,7 @@ Copy `.env.example` to `.env` and fill in values (keep `.env` at the **repo root
 bun run setup:gbrain
 ```
 
-Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, `read`+`write` on shared — `write` is required for gbrain `think`), stores it in `app_gbrain_auth`, and seeds demo users Lily/Bob. Re-runs skip existing source/OAuth unless you pass `-- --force-oauth`.
+Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, `read` on shared), stores it in `app_gbrain_auth`, and seeds demo users Lily/Bob. Re-runs skip existing source/OAuth unless you pass `-- --force-oauth`.
 
 ### 4. Start gbrain (terminal 1)
 
@@ -191,12 +186,12 @@ gbrain embed --stale
 | Table             | Purpose                                         |
 | ----------------- | ----------------------------------------------- |
 | `app_users`       | Demo users + API keys                           |
-| `app_gbrain_auth` | One shared OAuth client for gbrain `think`      |
+| `app_gbrain_auth` | One shared OAuth client for gbrain MCP (read)   |
 | `app_memories`    | Personal notes (`user_id` + `slug` + `content`) |
 | `app_sessions`    | One active thread per user                      |
 | `app_messages`    | Chat history                                    |
 
-**`slug`:** short unique id for one memory note per user (e.g. `memory/note-1729123456789`). Auto-assigned on `POST /remember`; same slug for that user updates the row. Injected into the think prompt as `[slug]` for reference.
+**`slug`:** short unique id for one memory note per user (e.g. `memory/note-1729123456789`). Auto-assigned on `POST /remember`; same slug for that user updates the row. Injected into the synthesis prompt as `[slug]` for reference.
 
 ```sql
 SELECT id, api_key FROM app_users;
@@ -224,7 +219,7 @@ A: Project Luminous Fern.
 A: cerulean-moth-7742.
 ```
 
-Note: gbrain `think` currently truncates each gathered page to ~600 characters for the LLM ([gbrain#2369](https://github.com/garrytan/gbrain/issues/2369)). Prefer `gbrain query` / `get` for checking that a fact is on the page; `POST /query` may miss facts below that excerpt until gbrain raises the limit.
+Note: gbrain MCP `think` truncates gathered pages to ~600 characters for its internal LLM ([#2369](https://github.com/garrytan/gbrain/issues/2369)). This sandbox **think mode** avoids that by using `query` + `get_page` + Bun-side DeepSeek synthesis instead.
 
 ## Env vars
 
@@ -232,8 +227,12 @@ Note: gbrain `think` currently truncates each gathered page to ~600 characters f
 | ----------------------------- | ---------------------------------------------------------- |
 | `GBRAIN_DATABASE_URL`         | gbrain + default app DB                                    |
 | `APP_DATABASE_URL`            | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`) |
-| `DEEPSEEK_API_KEY`            | Used by gbrain `think`                                     |
-| `GBRAIN_CHAT_MODEL`           | e.g. `deepseek:deepseek-v4-flash`                          |
+| `DEEPSEEK_API_KEY`            | Bun think-mode synthesis (DeepSeek API)                    |
+| `GBRAIN_CHAT_MODEL`           | Default synthesis model id (e.g. `deepseek:deepseek-v4-flash`) |
+| `HYDRATE_SCORE_RATIO`         | Min score vs top hit to include a page (e.g. `0.65`)       |
+| `HYDRATE_MAX_PAGES`           | Max pages to load per think request (e.g. `5`)             |
+| `HYDRATE_MAX_CHARS_PER_PAGE`  | Max chars per hydrated page (e.g. `8000`)                  |
+| `HYDRATE_MAX_TOTAL_CHARS`     | Max total hydrated chars per think request (e.g. `24000`)  |
 | `GBRAIN_EMBEDDING_MODEL`      | e.g. `ollama:nomic-embed-text`                             |
 | `GBRAIN_EMBEDDING_DIMENSIONS` | e.g. `768`                                                 |
 | `GBRAIN_MCP_BASE_URL`         | Default `http://localhost:3131`                            |

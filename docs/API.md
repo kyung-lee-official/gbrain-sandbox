@@ -57,7 +57,7 @@ Ask against shared gbrain knowledge. Optional `mode` selects the gbrain tool.
 
 | Mode     | gbrain tool | Behavior                                                                 |
 | -------- | ----------- | ------------------------------------------------------------------------ |
-| `think`  | `think`     | LLM synthesis; injects chat history + personal memories; stores the turn |
+| `think`  | `query` + `get_page`, then Bun LLM | Hybrid retrieve, load full page(s), synthesize with DeepSeek; chat + personal memory |
 | `query`  | `query`     | Hybrid retrieval only (no LLM, no chat write)                            |
 | `search` | `search`    | Keyword / BM25 retrieval only (no LLM, no chat write)                    |
 
@@ -95,7 +95,7 @@ Ask against shared gbrain knowledge. Optional `mode` selects the gbrain tool.
 | ------ | ----------------------------------------------------------------- |
 | `400`  | Invalid JSON, empty `message`, or invalid `mode`                  |
 | `401`  | Missing/invalid Bearer token                                      |
-| `502`  | gbrain OAuth/MCP tool failed (`error` is the message)             |
+| `502`  | gbrain OAuth/MCP tool failed, or DeepSeek synthesis failed (`error` is the message) |
 
 ### `POST /remember`
 
@@ -144,7 +144,7 @@ Save a personal note for the authenticated user only (`app_memories`). Does not 
 # Health
 curl -s http://localhost:3000/health
 
-# think (default) — LLM synthesis
+# think (default) — query + get_page + Bun DeepSeek synthesis
 curl -s -X POST http://localhost:3000/query \
   -H "Authorization: Bearer demo-key-lily" \
   -H "Content-Type: application/json" \

@@ -8,7 +8,7 @@ import { ResponseView, type ApiPayload } from "./response-view";
 type DemoUser = "lily" | "bob";
 
 const MODE_HELP: Record<AskMode, string> = {
-  think: "gbrain think — LLM synthesis + citations (uses chat + personal memory)",
+  think: "query + get_page — full shared pages, DeepSeek synthesis (chat + personal memory)",
   query: "gbrain query — hybrid retrieval (vector + keyword), no LLM",
   search: "gbrain search — keyword / BM25 retrieval, no LLM",
 };

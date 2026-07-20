@@ -55,8 +55,8 @@ async function fetchOAuthToken(
     grant_type: 'client_credentials',
     client_id: auth.oauth_client_id,
     client_secret: auth.oauth_client_secret,
-    // `think` is gated as write by gbrain (read covers search/query/get_page only).
-    scope: 'read write',
+    // query / search / get_page are read-scoped; think-mode synthesis runs in Bun.
+    scope: 'read',
   });
 
   const res = await fetch(oauthTokenUrl(), {
@@ -166,7 +166,17 @@ async function openMcpSession(auth: GbrainAuth): Promise<string | undefined> {
 }
 
 function extractToolText(result: unknown, opts?: { preferAnswer?: boolean }): string {
-  if (!result || typeof result !== 'object') return JSON.stringify(result);
+  return extractToolPayload(result, opts).text;
+}
+
+function extractToolPayload(
+  result: unknown,
+  opts?: { preferAnswer?: boolean },
+): { text: string; parsed: unknown | null } {
+  if (!result || typeof result !== 'object') {
+    const text = JSON.stringify(result);
+    return { text, parsed: null };
+  }
   const r = result as { content?: Array<{ type?: string; text?: string }>; structuredContent?: unknown };
   if (Array.isArray(r.content)) {
     const parts = r.content
@@ -177,20 +187,27 @@ function extractToolText(result: unknown, opts?: { preferAnswer?: boolean }): st
       if (opts?.preferAnswer) {
         try {
           const parsed = JSON.parse(joined) as { answer?: string };
-          if (typeof parsed.answer === 'string' && parsed.answer.trim()) return parsed.answer.trim();
+          if (typeof parsed.answer === 'string' && parsed.answer.trim()) {
+            return { text: parsed.answer.trim(), parsed };
+          }
         } catch {
           // not JSON — return raw text
         }
       }
       try {
-        return JSON.stringify(JSON.parse(joined), null, 2);
+        const parsed = JSON.parse(joined) as unknown;
+        return { text: JSON.stringify(parsed, null, 2), parsed };
       } catch {
-        return joined;
+        return { text: joined, parsed: null };
       }
     }
   }
-  if (r.structuredContent !== undefined) return JSON.stringify(r.structuredContent, null, 2);
-  return JSON.stringify(result, null, 2);
+  if (r.structuredContent !== undefined) {
+    const text = JSON.stringify(r.structuredContent, null, 2);
+    return { text, parsed: r.structuredContent };
+  }
+  const text = JSON.stringify(result, null, 2);
+  return { text, parsed: null };
 }
 
 async function callGbrainTool(
@@ -207,6 +224,44 @@ async function callGbrainTool(
   );
 }
 
+export type GbrainPage = {
+  slug: string;
+  title?: string;
+  compiled_truth: string;
+};
+
+/** Hybrid retrieval hits as parsed JSON (array of chunk rows). */
+export async function gbrainQueryHits(query: string): Promise<unknown> {
+  const result = await callGbrainTool('query', { query });
+  const { parsed } = extractToolPayload(result);
+  return parsed ?? [];
+}
+
+/** Full page body for a slug (avoids think's 600-char gather clips). */
+export async function gbrainGetPage(slug: string): Promise<GbrainPage> {
+  const result = await callGbrainTool('get_page', { slug });
+  const { parsed } = extractToolPayload(result);
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error(`get_page returned unexpected payload for slug ${slug}`);
+  }
+  const page = parsed as Record<string, unknown>;
+  const compiled =
+    typeof page.compiled_truth === 'string'
+      ? page.compiled_truth
+      : typeof page.compiledTruth === 'string'
+        ? page.compiledTruth
+        : '';
+  const resolvedSlug = typeof page.slug === 'string' ? page.slug : slug;
+  if (!compiled.trim()) {
+    throw new Error(`get_page returned empty compiled_truth for slug ${resolvedSlug}`);
+  }
+  return {
+    slug: resolvedSlug,
+    title: typeof page.title === 'string' ? page.title : undefined,
+    compiled_truth: compiled,
+  };
+}
+
 /** Keyword retrieval (BM25 / tsvector). No LLM. */
 export async function gbrainSearch(query: string): Promise<string> {
   const result = await callGbrainTool('search', { query });
@@ -219,7 +274,7 @@ export async function gbrainQuery(query: string): Promise<string> {
   return extractToolText(result);
 }
 
-/** Call gbrain `think` against the shared corpus via the app OAuth client. */
+/** Legacy gbrain think (600-char page clips). Prefer answerWithHydratedPages. */
 export async function gbrainThink(question: string): Promise<string> {
   const model = chatModel();
   const arguments_: Record<string, string> = { question };
