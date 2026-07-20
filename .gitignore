@@ -18,6 +18,3 @@ Thumbs.db
 .vscode/
 .idea/
 .cursor/
-
-# Nested git for shared-source (gbrain sync requires a git repo at the source path)
-shared-source/.git/

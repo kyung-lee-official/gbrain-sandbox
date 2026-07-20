@@ -18,7 +18,9 @@ gbrain-sandbox/
 └── assets/                 # Images (optional)
 ```
 
-Only `shared-source/` is a nested git repo (required by `gbrain sync`). Personal memory does **not** use git or gbrain sources. Keep `shared-source/` and `.env` at the **repo root** so project-scoped gbrain resolves them.
+Only `shared-source/` holds maintainer markdown for the shared gbrain source. It is a **normal subdirectory of this monorepo** (one git root — no nested `shared-source/.git`). Personal memory does **not** use git or gbrain sources. Keep `shared-source/` and `.env` at the **repo root** so project-scoped gbrain resolves them.
+
+Requires **gbrain ≥ 0.42.62** (monorepo `--src-subpath` / subdir auto-discovery). On Windows, if `gbrain sync` errors with “resolves outside git repo”, your gbrain build still has a path-separator bug in the scope check — upgrade, or patch `sync.ts` to use `path.sep` instead of hardcoded `/`.
 
 ## Architecture
 
@@ -174,12 +176,14 @@ Request/response shapes, errors, and curl examples: [`docs/API.md`](docs/API.md)
 
 ## Maintainer workflow (shared only)
 
-Add or edit markdown under `shared-source/` (tracked in this monorepo). Also commit inside the nested `shared-source/` git repo so `gbrain sync` picks up the change, then:
+Add or edit markdown under `shared-source/`, commit in **this** repo, then:
 
 ```bash
 gbrain sync --source shared-source
 gbrain embed --stale
 ```
+
+gbrain walks up from `./shared-source` to the monorepo `.git` and imports only that subdirectory.
 
 ## Postgres tables (Bun)
 
@@ -201,22 +205,22 @@ SELECT role, left(content, 80) FROM app_messages ORDER BY created_at DESC LIMIT 
 
 ## Test demo
 
-Demo markdown under `shared-source/` is tracked in this repo. `shared-source/` is also a nested git repo (required by `gbrain sync`; only `shared-source/.git/` is ignored at the monorepo root). After editing pages:
+Demo markdown under `shared-source/` is tracked in this repo. After editing pages, commit at the monorepo root, then:
 
 ```bash
 gbrain sync --source shared-source
 gbrain embed --stale
 ```
 
-**Single-file checks** (`test-demo.md`): protocol codename, vault passphrase, Chief Archivist, etc.
+**Single-file checks** (`shared-source/test-demo`): protocol codename, vault passphrase, Chief Archivist, etc.
 
-**Cross-file hydrate** — answer is split across three pages:
+**Cross-file hydrate** — answer is split across three pages (slugs are git-root-relative):
 
-| File                  | Fact                                    |
-| --------------------- | --------------------------------------- |
-| `north-quay-relay.md` | callsign `ORION-LATCH` (Pier 7)         |
-| `duty-roster.md`      | color token `violet-green` (Mira Quill) |
-| `heptagon-watch.md`   | watch count `7`                         |
+| Slug                             | Fact                                    |
+| -------------------------------- | --------------------------------------- |
+| `shared-source/north-quay-relay` | callsign `ORION-LATCH` (Pier 7)         |
+| `shared-source/duty-roster`      | color token `violet-green` (Mira Quill) |
+| `shared-source/heptagon-watch`   | watch count `7`                         |
 
 Ask in **think** mode: _What is the full arming formula for the North Quay Relay?_  
 Expected: `ORION-LATCH/violet-green/7`. API console logs every `query` hit (score, ratio vs top, factors) and marks hydrate-selected slugs.

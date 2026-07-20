@@ -68,29 +68,38 @@ function parseOAuthRegistration(output: string): OAuthRegistration {
 	return { clientId, clientSecret };
 }
 
-async function ensureGitRepo(relativeDir: string): Promise<void> {
-	const dir = `${REPO_ROOT}/${relativeDir}`;
-	const inside = Bun.spawnSync(["git", "rev-parse", "--is-inside-work-tree"], {
-		cwd: dir,
+/**
+ * shared-source/ is a normal subdirectory of the monorepo (one git root).
+ * gbrain ≥0.42.62 discovers the root .git and syncs only that subpath.
+ */
+function assertMonorepoSharedSource(): void {
+	const rootProc = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+		cwd: REPO_ROOT,
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	if (inside.exitCode !== 0) {
-		run(["git", "init"], dir);
-		console.log(`Initialized git repo: ${relativeDir}`);
-	}
-	const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
-		cwd: dir,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	if (head.exitCode !== 0) {
-		run(["git", "add", "-A"], dir);
-		run(
-			["git", "commit", "-m", "chore: initial source commit", "--allow-empty"],
-			dir,
+	if (rootProc.exitCode !== 0) {
+		throw new Error(
+			`Repo root is not a git work tree: ${REPO_ROOT}. Initialize git at the monorepo root.`,
 		);
-		console.log(`Created initial commit: ${relativeDir}`);
+	}
+	const sharedDir = `${REPO_ROOT}/shared-source`;
+	const sharedProc = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+		cwd: sharedDir,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const fromRoot = new TextDecoder().decode(rootProc.stdout).trim();
+	const fromShared = new TextDecoder().decode(sharedProc.stdout).trim();
+	if (sharedProc.exitCode !== 0 || !fromShared) {
+		throw new Error(
+			`shared-source/ is missing or not inside the monorepo git tree (${sharedDir}).`,
+		);
+	}
+	if (fromShared !== fromRoot) {
+		throw new Error(
+			`shared-source/ has its own .git (${fromShared}). Delete shared-source/.git so sync uses the monorepo root (${fromRoot}).`,
+		);
 	}
 }
 
@@ -141,7 +150,7 @@ async function main(): Promise<void> {
 	}
 
 	console.log("Registering shared gbrain source...");
-	await ensureGitRepo("shared-source");
+	assertMonorepoSharedSource();
 	runGbrainAllowExists([
 		"sources",
 		"add",
@@ -151,9 +160,17 @@ async function main(): Promise<void> {
 		"--federated",
 	]);
 
-	console.log("Syncing shared-source...");
+	console.log("Syncing shared-source (monorepo subdir)...");
 	try {
-		runGbrain(["sync", "--source", SHARED_SOURCE_ID]);
+		runGbrain([
+			"sync",
+			"--source",
+			SHARED_SOURCE_ID,
+			"--repo",
+			"./shared-source",
+			"--full",
+			"--no-pull",
+		]);
 	} catch (err) {
 		console.warn(
 			"Sync warning (non-fatal):",
