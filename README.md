@@ -148,6 +148,54 @@ bun run setup:gbrain
 
 Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, `read` on shared), stores it in `app_gbrain_auth`, and seeds demo users Lily/Bob. Re-runs skip existing source/OAuth unless you pass `-- --force-oauth`.
 
+#### How Bun authenticates to gbrain (MCP)
+
+Two different “Bearer” tokens show up in this project — do not confuse them:
+
+| Token                                           | Who issues it              | Who uses it                                       | Lifetime                                             |
+| ----------------------------------------------- | -------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
+| Demo API key (`demo-key-lily` / `demo-key-bob`) | This Bun app (`app_users`) | Browser / curl → Bun (`POST /query`, `/remember`) | Permanent until you change the row                   |
+| gbrain OAuth **access token**                   | gbrain `/token`            | Bun → gbrain MCP (`/mcp`)                         | Short-lived (cached in Bun memory until near expiry) |
+
+Setup registers a long-lived **OAuth client** with gbrain. Equivalent CLI (run from the repo root; `setup:gbrain` does this for you):
+
+```bash
+gbrain auth register-client sandbox-shared \
+  --grant-types client_credentials \
+  --scopes read \
+  --source shared-source \
+  --federated-read shared-source
+```
+
+gbrain returns `client_id` + `client_secret`; Bun saves them in `app_gbrain_auth` (single row `id = 'default'`). Those credentials stay valid until you revoke/re-register (e.g. `--force-oauth`). They are **not** Lily/Bob accounts and are **not** the Admin Token printed by `gbrain serve` (that is only for `http://localhost:3131/admin`).
+
+At runtime, when the Bun API needs shared knowledge:
+
+1. Load `oauth_client_id` / `oauth_client_secret` from `app_gbrain_auth`
+2. `POST` to gbrain `/token` with `grant_type=client_credentials` and `scope=read`
+3. Receive a temporary `access_token`
+4. Call gbrain MCP (`/mcp`) with `Authorization: Bearer <access_token>` for tools such as `query`, `search`, and `get_page`
+
+```mermaid
+%%{init: {'theme': 'neo-dark'}}%%
+sequenceDiagram
+  participant Setup as setup:gbrain
+  participant Gbrain as gbrain serve
+  participant DB as app_gbrain_auth
+  participant Bun as Bun API
+  participant User as Client (Lily/Bob key)
+
+  Setup->>Gbrain: auth register-client sandbox-shared
+  Gbrain-->>Setup: client_id + client_secret
+  Setup->>DB: store credentials
+
+  User->>Bun: Bearer demo-key-lily
+  Bun->>DB: load client_id/secret
+  Bun->>Gbrain: POST /token client_credentials
+  Gbrain-->>Bun: access_token short-lived
+  Bun->>Gbrain: MCP tools/call Bearer access_token
+```
+
 ### 4. Start gbrain (terminal 1)
 
 ```bash
@@ -193,14 +241,15 @@ gbrain walks up from `./shared-source` to the monorepo `.git` and imports only t
 
 ## Postgres tables (Bun)
 
-| Table             | Purpose                                         |
-| ----------------- | ----------------------------------------------- |
-| `app_users`       | Demo users + API keys                           |
-| `app_gbrain_auth` | One shared OAuth client for gbrain MCP (read)   |
-| `app_memories`    | Personal notes (`user_id` + `slug` + `content`) |
-| `app_sessions`    | One active thread per user                      |
-| `app_messages`    | Chat history                                    |
+| Table             | Purpose                                                                |
+| ----------------- | ---------------------------------------------------------------------- |
+| `app_users`       | Demo users + API keys (`lily` / `bob`)                                 |
+| `app_gbrain_auth` | Long-lived gbrain OAuth **client** id/secret (app → MCP; not per-user) |
+| `app_memories`    | Personal notes (`user_id` + `slug` + `content`)                        |
+| `app_sessions`    | One active thread per user                                             |
+| `app_messages`    | Chat history                                                           |
 
+`app_gbrain_auth` columns: `id` (always `default`), `oauth_client_id`, `oauth_client_secret`, `updated_at`. gbrain does **not** read this table — it is Bun’s private copy of the client credentials issued at setup.
 **`slug`:** short unique id for one memory note per user (e.g. `memory/note-1729123456789`). Auto-assigned on `POST /remember`; same slug for that user updates the row. Injected into the synthesis prompt as `[slug]` for reference.
 
 ```sql
