@@ -11,7 +11,10 @@ import {
   getUserById,
   insertMemory,
   insertMessage,
+  listMemoriesForUser,
+  listMessagesForUser,
   listRecentMessages,
+  listSessionsForUser,
   listUsers,
   migrate,
   searchMemoriesByUser,
@@ -23,7 +26,7 @@ import { logRetrievalHits, parseRetrievalHits } from "./retrieval.ts";
 
 export type AskMode = "think" | "query" | "search";
 
-/** Browser UI is on :3001; without these, fetch fails as "Failed to fetch". */
+/** Browser UI is on :3133; without these, fetch fails as "Failed to fetch". */
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
@@ -266,6 +269,54 @@ async function handleDeleteUser(
   return json({ deleted: true, id });
 }
 
+function isoFromDate(value: Date | string | undefined | null): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+async function handleGetUserData(
+  req: Request,
+  idParam: string,
+): Promise<Response> {
+  const actor = await resolveUser(req);
+  if (!actor) return unauthorized();
+
+  const id = normalizeUserId(idParam);
+  if (!id) return json({ error: "Invalid user id" }, 400);
+
+  const user = await getUserById(id);
+  if (!user) return json({ error: "User not found" }, 404);
+
+  const [memories, sessions, messages] = await Promise.all([
+    listMemoriesForUser(id),
+    listSessionsForUser(id),
+    listMessagesForUser(id),
+  ]);
+
+  return json({
+    user: userJson(user),
+    memories: memories.map((m) => ({
+      id: m.id,
+      slug: m.slug,
+      content: m.content,
+      createdAt: isoFromDate(m.created_at),
+    })),
+    sessions: sessions.map((s) => ({
+      id: s.id,
+      createdAt: isoFromDate(s.created_at),
+      updatedAt: isoFromDate(s.updated_at),
+    })),
+    messages: messages.map((m) => ({
+      id: m.id,
+      sessionId: m.session_id,
+      role: m.role,
+      content: m.content,
+      createdAt: isoFromDate(m.created_at),
+    })),
+  });
+}
+
 async function handleHealth(): Promise<Response> {
   return json({ ok: true });
 }
@@ -287,6 +338,11 @@ const server = Bun.serve({
     if (req.method === "POST" && path === "/users")
       return handleCreateUser(req);
 
+    const userDataMatch = path.match(/^\/users\/([^/]+)\/data$/);
+    if (req.method === "GET" && userDataMatch) {
+      return handleGetUserData(req, decodeURIComponent(userDataMatch[1]!));
+    }
+
     const userMatch = path.match(/^\/users\/([^/]+)$/);
     if (userMatch) {
       const id = decodeURIComponent(userMatch[1]!);
@@ -303,6 +359,7 @@ await migrate();
 await seedDemoUsersIfEmpty();
 
 console.log(`gbrain-sandbox API listening on http://localhost:${server.port}`);
-console.log("User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id");
-
+console.log(
+  "User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id, GET /users/:id/data",
+);
 export default server;

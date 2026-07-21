@@ -1,21 +1,22 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import {
   ApiError,
+  type ApiUser,
+  type AskMode,
   getHealth,
   listUsers,
   postQuery,
   postRemember,
   UserQueryKey,
-  type ApiUser,
-  type AskMode,
 } from "@/lib/api";
-import { ResponseView, type ApiPayload } from "./response-view";
+import { type ApiPayload, ResponseView } from "./response-view";
+import { UserDataPanel } from "./user-data-panel";
 import { UserSidebar } from "./user-sidebar";
 
 const MODE_HELP: Record<AskMode, string> = {
@@ -44,6 +45,7 @@ function errorMessage(err: unknown): string {
 }
 
 export function DemoPanel() {
+  const queryClient = useQueryClient();
   const [active, setActive] = useState<ApiUser | null>(null);
   const [payload, setPayload] = useState<ApiPayload | null>(null);
 
@@ -82,9 +84,14 @@ export function DemoPanel() {
       if (!active) throw new Error("Select a signed-in user.");
       return postRemember({ apiKey: active.apiKey, content: values.content });
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setPayload(data);
       rememberForm.reset({ content: "" });
+      if (active) {
+        await queryClient.invalidateQueries({
+          queryKey: UserQueryKey.Data(active.id),
+        });
+      }
     },
     onError: (err) => setPayload({ error: errorMessage(err) }),
   });
@@ -98,9 +105,14 @@ export function DemoPanel() {
         mode: values.mode,
       });
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setPayload(data);
       askForm.reset({ mode: askForm.getValues("mode"), message: "" });
+      if (active) {
+        await queryClient.invalidateQueries({
+          queryKey: UserQueryKey.Data(active.id),
+        });
+      }
     },
     onError: (err) => setPayload({ error: errorMessage(err) }),
   });
@@ -116,10 +128,10 @@ export function DemoPanel() {
       <p
         className={
           healthQuery.isLoading
-            ? "my-1 text-sm text-muted"
+            ? "my-1 text-muted text-sm"
             : healthOk
-              ? "my-1 text-sm text-ok"
-              : "my-1 text-sm text-danger"
+              ? "my-1 text-ok text-sm"
+              : "my-1 text-danger text-sm"
         }
       >
         {healthQuery.isLoading
@@ -139,7 +151,7 @@ export function DemoPanel() {
         />
 
         <div className="flex flex-col gap-4">
-          <p className="m-0 text-sm text-muted">
+          <p className="m-0 text-muted text-sm">
             Signed in as{" "}
             <strong className="text-ink">
               {active ? active.id : "nobody — pick a user in the sidebar"}
@@ -153,8 +165,10 @@ export function DemoPanel() {
               rememberMutation.mutate(values);
             })}
           >
-            <h2 className="m-0 font-display text-lg text-ink">Remember</h2>
-            <p className="m-0 text-sm text-muted">POST /remember — personal note in app Postgres</p>
+            <h2 className="m-0 font-display text-ink text-lg">Remember</h2>
+            <p className="m-0 text-muted text-sm">
+              POST /remember — personal note in app Postgres
+            </p>
             <textarea
               className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
               rows={3}
@@ -163,14 +177,16 @@ export function DemoPanel() {
               {...rememberForm.register("content")}
             />
             {rememberForm.formState.errors.content ? (
-              <p className="m-0 text-sm text-danger">
+              <p className="m-0 text-danger text-sm">
                 {rememberForm.formState.errors.content.message}
               </p>
             ) : null}
             <button
               type="submit"
               className="self-start rounded border border-accent bg-accent px-3.5 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={pending || !active || rememberForm.formState.isSubmitting}
+              disabled={
+                pending || !active || rememberForm.formState.isSubmitting
+              }
             >
               Save note
             </button>
@@ -183,8 +199,10 @@ export function DemoPanel() {
               askMutation.mutate(values);
             })}
           >
-            <h2 className="m-0 font-display text-lg text-ink">Ask</h2>
-            <p className="m-0 text-sm text-muted">POST /query — {MODE_HELP[mode]}</p>
+            <h2 className="m-0 font-display text-ink text-lg">Ask</h2>
+            <p className="m-0 text-muted text-sm">
+              POST /query — {MODE_HELP[mode]}
+            </p>
             <label className="flex flex-col gap-1.5 text-sm">
               <span>Mode</span>
               <select
@@ -205,7 +223,7 @@ export function DemoPanel() {
               {...askForm.register("message")}
             />
             {askForm.formState.errors.message ? (
-              <p className="m-0 text-sm text-danger">
+              <p className="m-0 text-danger text-sm">
                 {askForm.formState.errors.message.message}
               </p>
             ) : null}
@@ -219,6 +237,8 @@ export function DemoPanel() {
           </form>
 
           <ResponseView pending={pending} payload={payload} />
+
+          <UserDataPanel active={active} />
         </div>
       </div>
     </div>
