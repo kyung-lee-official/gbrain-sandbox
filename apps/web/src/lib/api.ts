@@ -23,9 +23,38 @@ export type RememberResult = {
   saved?: boolean;
 };
 
+export type UserMemoryRow = {
+  id: number;
+  slug: string;
+  content: string;
+  createdAt: string | null;
+};
+
+export type UserSessionRow = {
+  id: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type UserMessageRow = {
+  id: number;
+  sessionId: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string | null;
+};
+
+export type UserDataDump = {
+  user: ApiUser;
+  memories: UserMemoryRow[];
+  sessions: UserSessionRow[];
+  messages: UserMessageRow[];
+};
+
 export const UserQueryKey = {
   List: ["users"] as const,
   Health: ["health"] as const,
+  Data: (id: string) => ["users", id, "data"] as const,
 } as const;
 
 export async function getHealth(): Promise<{ ok: boolean }> {
@@ -74,6 +103,15 @@ export async function deleteUser(input: {
       apiKey: input.actorApiKey,
     },
   );
+}
+
+export async function getUserData(input: {
+  id: string;
+  apiKey: string;
+}): Promise<UserDataDump> {
+  return apiFetch<UserDataDump>(`/users/${encodeURIComponent(input.id)}/data`, {
+    apiKey: input.apiKey,
+  });
 }
 
 export async function postQuery(input: {
