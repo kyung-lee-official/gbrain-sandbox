@@ -5,6 +5,7 @@ import {
   type AppUser,
   countUsers,
   createUser,
+  deleteMemoryForUser,
   deleteUser,
   getOrCreateSession,
   getUserByApiKey,
@@ -288,10 +289,19 @@ async function handleGetUserData(
   const user = await getUserById(id);
   if (!user) return json({ error: "User not found" }, 404);
 
-  const [memories, sessions, messages] = await Promise.all([
+  const url = new URL(req.url);
+  const messagePageRaw = Number.parseInt(
+    url.searchParams.get("messagePage") ?? "1",
+    10,
+  );
+  const messagePage =
+    Number.isFinite(messagePageRaw) && messagePageRaw > 0 ? messagePageRaw : 1;
+  const messagePageSize = 50;
+
+  const [memories, sessions, messagePageResult] = await Promise.all([
     listMemoriesForUser(id),
     listSessionsForUser(id),
-    listMessagesForUser(id),
+    listMessagesForUser(id, { page: messagePage, pageSize: messagePageSize }),
   ]);
 
   return json({
@@ -307,14 +317,40 @@ async function handleGetUserData(
       createdAt: isoFromDate(s.created_at),
       updatedAt: isoFromDate(s.updated_at),
     })),
-    messages: messages.map((m) => ({
-      id: m.id,
-      sessionId: m.session_id,
-      role: m.role,
-      content: m.content,
-      createdAt: isoFromDate(m.created_at),
-    })),
+    messages: {
+      items: messagePageResult.items.map((m) => ({
+        id: m.id,
+        sessionId: m.session_id,
+        role: m.role,
+        content: m.content,
+        createdAt: isoFromDate(m.created_at),
+      })),
+      total: messagePageResult.total,
+      page: messagePageResult.page,
+      pageSize: messagePageResult.pageSize,
+    },
   });
+}
+
+async function handleDeleteMemory(
+  req: Request,
+  idParam: string,
+  memoryIdParam: string,
+): Promise<Response> {
+  const actor = await resolveUser(req);
+  if (!actor) return unauthorized();
+
+  const id = normalizeUserId(idParam);
+  if (!id) return json({ error: "Invalid user id" }, 400);
+
+  const memoryId = Number.parseInt(memoryIdParam, 10);
+  if (!Number.isFinite(memoryId) || memoryId <= 0) {
+    return json({ error: "Invalid memory id" }, 400);
+  }
+
+  const deleted = await deleteMemoryForUser(id, memoryId);
+  if (!deleted) return json({ error: "Memory not found" }, 404);
+  return json({ deleted: true, id: memoryId });
 }
 
 async function handleHealth(): Promise<Response> {
@@ -343,6 +379,15 @@ const server = Bun.serve({
       return handleGetUserData(req, decodeURIComponent(userDataMatch[1]!));
     }
 
+    const memoryMatch = path.match(/^\/users\/([^/]+)\/memories\/(\d+)$/);
+    if (req.method === "DELETE" && memoryMatch) {
+      return handleDeleteMemory(
+        req,
+        decodeURIComponent(memoryMatch[1]!),
+        memoryMatch[2]!,
+      );
+    }
+
     const userMatch = path.match(/^\/users\/([^/]+)$/);
     if (userMatch) {
       const id = decodeURIComponent(userMatch[1]!);
@@ -360,6 +405,6 @@ await seedDemoUsersIfEmpty();
 
 console.log(`gbrain-sandbox API listening on http://localhost:${server.port}`);
 console.log(
-  "User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id, GET /users/:id/data",
+  "User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id, GET /users/:id/data, DELETE /users/:id/memories/:memoryId",
 );
 export default server;

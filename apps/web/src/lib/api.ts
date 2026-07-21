@@ -44,17 +44,50 @@ export type UserMessageRow = {
   createdAt: string | null;
 };
 
+export type UserMessagesPage = {
+  items: UserMessageRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type UserDataDump = {
   user: ApiUser;
   memories: UserMemoryRow[];
   sessions: UserSessionRow[];
-  messages: UserMessageRow[];
+  messages: UserMessagesPage;
 };
+
+function normalizeMessagesPage(
+  raw: UserMessagesPage | UserMessageRow[] | undefined,
+  page: number,
+): UserMessagesPage {
+  if (Array.isArray(raw)) {
+    return {
+      items: raw,
+      total: raw.length,
+      page,
+      pageSize: Math.max(raw.length, 50),
+    };
+  }
+  if (raw && Array.isArray(raw.items)) {
+    return {
+      items: raw.items,
+      total: typeof raw.total === "number" ? raw.total : raw.items.length,
+      page: typeof raw.page === "number" ? raw.page : page,
+      pageSize: typeof raw.pageSize === "number" ? raw.pageSize : 50,
+    };
+  }
+  return { items: [], total: 0, page, pageSize: 50 };
+}
 
 export const UserQueryKey = {
   List: ["users"] as const,
   Health: ["health"] as const,
-  Data: (id: string) => ["users", id, "data"] as const,
+  /** Prefix for all pages of a user's DB dump (use for invalidateQueries). */
+  DataRoot: (id: string) => ["users", id, "data"] as const,
+  Data: (id: string, messagePage: number) =>
+    ["users", id, "data", messagePage] as const,
 } as const;
 
 export async function getHealth(): Promise<{ ok: boolean }> {
@@ -108,10 +141,38 @@ export async function deleteUser(input: {
 export async function getUserData(input: {
   id: string;
   apiKey: string;
+  messagePage?: number;
 }): Promise<UserDataDump> {
-  return apiFetch<UserDataDump>(`/users/${encodeURIComponent(input.id)}/data`, {
+  const page = input.messagePage ?? 1;
+  const qs = page > 1 ? `?messagePage=${page}` : "";
+  const data = await apiFetch<{
+    user: ApiUser;
+    memories: UserMemoryRow[];
+    sessions: UserSessionRow[];
+    messages: UserMessagesPage | UserMessageRow[];
+  }>(`/users/${encodeURIComponent(input.id)}/data${qs}`, {
     apiKey: input.apiKey,
   });
+  return {
+    ...data,
+    memories: data.memories ?? [],
+    sessions: data.sessions ?? [],
+    messages: normalizeMessagesPage(data.messages, page),
+  };
+}
+
+export async function deleteUserMemory(input: {
+  userId: string;
+  memoryId: number;
+  apiKey: string;
+}): Promise<{ deleted: boolean; id: number }> {
+  return apiFetch<{ deleted: boolean; id: number }>(
+    `/users/${encodeURIComponent(input.userId)}/memories/${input.memoryId}`,
+    {
+      method: "DELETE",
+      apiKey: input.apiKey,
+    },
+  );
 }
 
 export async function postQuery(input: {

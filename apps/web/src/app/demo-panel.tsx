@@ -89,7 +89,7 @@ export function DemoPanel() {
       rememberForm.reset({ content: "" });
       if (active) {
         await queryClient.invalidateQueries({
-          queryKey: UserQueryKey.Data(active.id),
+          queryKey: UserQueryKey.DataRoot(active.id),
         });
       }
     },
@@ -110,7 +110,7 @@ export function DemoPanel() {
       askForm.reset({ mode: askForm.getValues("mode"), message: "" });
       if (active) {
         await queryClient.invalidateQueries({
-          queryKey: UserQueryKey.Data(active.id),
+          queryKey: UserQueryKey.DataRoot(active.id),
         });
       }
     },
@@ -238,7 +238,7 @@ export function DemoPanel() {
 
           <ResponseView pending={pending} payload={payload} />
 
-          <UserDataPanel active={active} />
+          <UserDataPanel key={active?.id ?? "none"} active={active} />
         </div>
       </div>
     </div>

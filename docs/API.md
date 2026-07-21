@@ -11,6 +11,7 @@ All responses are JSON (`Content-Type: application/json`).
 | `GET /health`                           | none                                                |
 | `GET /users`, `GET /users/:id`          | none (sandbox convenience)                          |
 | `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                   |
+| `DELETE /users/:id/memories/:memoryId`  | `Authorization: Bearer <api-key>`                   |
 | `POST /users`                           | Bearer if any users exist; open when table is empty |
 | `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                   |
 | `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                   |
@@ -91,7 +92,15 @@ Requires Bearer. Cascades memories, sessions, and messages.
 
 ### `GET /users/:id/data`
 
-Requires Bearer. Returns all app Postgres rows for that user (`app_memories`, `app_sessions`, `app_messages`). Any authenticated sandbox user may inspect any id.
+Requires Bearer. Returns app Postgres rows for that user (`app_memories`, `app_sessions`, paginated `app_messages`). Any authenticated sandbox user may inspect any id.
+
+Query:
+
+| Param          | Default | Notes                                      |
+| -------------- | ------- | ------------------------------------------ |
+| `messagePage`  | `1`     | 1-based page of messages (50 per page)     |
+
+Messages are ordered **newest first** (`created_at DESC`).
 
 **200**
 
@@ -104,19 +113,30 @@ Requires Bearer. Returns all app Postgres rows for that user (`app_memories`, `a
   "sessions": [
     { "id": "uuid", "createdAt": "…", "updatedAt": "…" }
   ],
-  "messages": [
-    {
-      "id": 1,
-      "sessionId": "uuid",
-      "role": "user",
-      "content": "…",
-      "createdAt": "…"
-    }
-  ]
+  "messages": {
+    "items": [
+      {
+        "id": 1,
+        "sessionId": "uuid",
+        "role": "user",
+        "content": "…",
+        "createdAt": "…"
+      }
+    ],
+    "total": 120,
+    "page": 1,
+    "pageSize": 50
+  }
 }
 ```
 
 **404** if the user id does not exist.
+
+### `DELETE /users/:id/memories/:memoryId`
+
+Requires Bearer. Deletes one `app_memories` row owned by `:id`.
+
+**200** `{ "deleted": true, "id": 1 }`, or **404**.
 
 ### `POST /query`
 

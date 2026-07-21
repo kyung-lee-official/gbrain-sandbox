@@ -304,6 +304,19 @@ export async function listMemoriesForUser(
   }));
 }
 
+/** Delete one memory owned by `userId`. Returns false if missing. */
+export async function deleteMemoryForUser(
+  userId: string,
+  memoryId: number,
+): Promise<boolean> {
+  const rows = await db()`
+    DELETE FROM app_memories
+    WHERE id = ${memoryId} AND user_id = ${userId}
+    RETURNING id
+  `;
+  return rows.length > 0;
+}
+
 /** All chat sessions for one user. */
 export async function listSessionsForUser(
   userId: string,
@@ -322,24 +335,52 @@ export async function listSessionsForUser(
   }));
 }
 
-/** All chat messages for one user across sessions. */
+export type MessagePage = {
+  items: AppMessage[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+/** Chat messages for one user (newest first), paginated. */
 export async function listMessagesForUser(
   userId: string,
-): Promise<AppMessage[]> {
+  options?: { page?: number; pageSize?: number },
+): Promise<MessagePage> {
+  const pageSize = Math.min(Math.max(options?.pageSize ?? 50, 1), 200);
+  const page = Math.max(options?.page ?? 1, 1);
+  const offset = (page - 1) * pageSize;
+
+  const countRows = await db()`
+    SELECT COUNT(*)::int AS count
+    FROM app_messages m
+    INNER JOIN app_sessions s ON s.id = m.session_id
+    WHERE s.user_id = ${userId}
+  `;
+  const total = Number(countRows[0]?.count ?? 0);
+
   const rows = await db()`
     SELECT m.id, m.session_id, m.role, m.content, m.created_at
     FROM app_messages m
     INNER JOIN app_sessions s ON s.id = m.session_id
     WHERE s.user_id = ${userId}
-    ORDER BY m.created_at ASC, m.id ASC
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT ${pageSize}
+    OFFSET ${offset}
   `;
-  return rows.map((row) => ({
-    id: Number(row.id),
-    session_id: row.session_id as string,
-    role: row.role as "user" | "assistant",
-    content: row.content as string,
-    created_at: row.created_at as Date,
-  }));
+
+  return {
+    items: rows.map((row) => ({
+      id: Number(row.id),
+      session_id: row.session_id as string,
+      role: row.role as "user" | "assistant",
+      content: row.content as string,
+      created_at: row.created_at as Date,
+    })),
+    total,
+    page,
+    pageSize,
+  };
 }
 
 /** Retrieve memories for one user only (hard `user_id` filter). */
