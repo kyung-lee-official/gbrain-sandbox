@@ -1,6 +1,6 @@
 # Bun HTTP API
 
-Base URL: `http://localhost:3000` (override with `PORT`).
+Base URL: `http://localhost:3132` (override with `PORT`).
 
 All responses are JSON (`Content-Type: application/json`).
 
@@ -10,6 +10,7 @@ All responses are JSON (`Content-Type: application/json`).
 | --------------------------------------- | --------------------------------------------------- |
 | `GET /health`                           | none                                                |
 | `GET /users`, `GET /users/:id`          | none (sandbox convenience)                          |
+| `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                   |
 | `POST /users`                           | Bearer if any users exist; open when table is empty |
 | `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                   |
 | `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                   |
@@ -87,6 +88,35 @@ Requires Bearer. Body `{ "apiKey?" }` — omit `apiKey` to regenerate.
 Requires Bearer. Cascades memories, sessions, and messages.
 
 **200** `{ "deleted": true, "id": "..." }`, or **404**.
+
+### `GET /users/:id/data`
+
+Requires Bearer. Returns all app Postgres rows for that user (`app_memories`, `app_sessions`, `app_messages`). Any authenticated sandbox user may inspect any id.
+
+**200**
+
+```json
+{
+  "user": { "id": "lily", "apiKey": "demo-key-lily", "createdAt": "..." },
+  "memories": [
+    { "id": 1, "slug": "memory/…", "content": "…", "createdAt": "…" }
+  ],
+  "sessions": [
+    { "id": "uuid", "createdAt": "…", "updatedAt": "…" }
+  ],
+  "messages": [
+    {
+      "id": 1,
+      "sessionId": "uuid",
+      "role": "user",
+      "content": "…",
+      "createdAt": "…"
+    }
+  ]
+}
+```
+
+**404** if the user id does not exist.
 
 ### `POST /query`
 
@@ -193,37 +223,37 @@ Save a personal note for the authenticated user only (`app_memories`). Does not 
 
 ```bash
 # Health
-curl.exe -s --max-time 5 http://localhost:3000/health
+curl.exe -s --max-time 5 http://localhost:3132/health
 
 # List users
-curl.exe -s --max-time 5 http://localhost:3000/users
+curl.exe -s --max-time 5 http://localhost:3132/users
 
 # Create user (signed in as lily)
-curl.exe -s --max-time 10 -X POST http://localhost:3000/users \
+curl.exe -s --max-time 10 -X POST http://localhost:3132/users \
   -H "Authorization: Bearer demo-key-lily" \
   -H "Content-Type: application/json" \
   -d "{\"id\":\"mina\"}"
 
 # think (default) — query + get_page + Bun DeepSeek synthesis
-curl.exe -s --max-time 60 -X POST http://localhost:3000/query \
+curl.exe -s --max-time 60 -X POST http://localhost:3132/query \
   -H "Authorization: Bearer demo-key-lily" \
   -H "Content-Type: application/json" \
   -d "{\"message\":\"What is the sandbox verification protocol codename?\",\"mode\":\"think\"}"
 
 # query — hybrid retrieval (no LLM)
-curl.exe -s --max-time 30 -X POST http://localhost:3000/query \
+curl.exe -s --max-time 30 -X POST http://localhost:3132/query \
   -H "Authorization: Bearer demo-key-haewon" \
   -H "Content-Type: application/json" \
   -d "{\"message\":\"What passphrase unlocks the sandbox test vault?\",\"mode\":\"query\"}"
 
 # Personal memory (app Postgres, Lily only)
-curl.exe -s --max-time 10 -X POST http://localhost:3000/remember \
+curl.exe -s --max-time 10 -X POST http://localhost:3132/remember \
   -H "Authorization: Bearer demo-key-lily" \
   -H "Content-Type: application/json" \
   -d "{\"content\":\"My favorite coffee is oat latte.\"}"
 
 # Haewon cannot see Lily's app_memories
-curl.exe -s --max-time 60 -X POST http://localhost:3000/query \
+curl.exe -s --max-time 60 -X POST http://localhost:3132/query \
   -H "Authorization: Bearer demo-key-haewon" \
   -H "Content-Type: application/json" \
   -d "{\"message\":\"What is Lily favorite coffee?\"}"

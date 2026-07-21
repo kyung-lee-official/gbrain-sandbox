@@ -7,8 +7,8 @@ Turborepo monorepo: Bun HTTP API (`apps/api`) with **shared knowledge in gbrain*
 ```
 gbrain-sandbox/
 ├── apps/
-│   ├── api/                # Bun HTTP API (@gbrain-sandbox/api) :3000
-│   └── web/                # Next.js UI (@gbrain-sandbox/web) :3001
+│   ├── api/                # Bun HTTP API (@gbrain-sandbox/api) :3132
+│   └── web/                # Next.js UI (@gbrain-sandbox/web) :3133
 ├── packages/
 │   └── typescript-config/  # Shared TSConfig
 ├── shared-source/          # Maintainer knowledge → one gbrain source (repo root)
@@ -34,11 +34,11 @@ Requires **gbrain ≥ 0.42.62** (monorepo subdir sync / `--src-subpath`). On Win
 %%{init: {'theme': 'neo-dark'}}%%
 flowchart TB
   subgraph clients [Clients]
-    Web[Next.js :3001]
+    Web[Next.js :3133]
     Lily[App users]
   end
 
-  subgraph bun [Bun API :3000]
+  subgraph bun [Bun API :3132]
     Auth[Auth api-key]
     Remember["POST /remember"]
     Query["POST /query<br/>mode think|query|search"]
@@ -172,8 +172,8 @@ Uses Bun workspaces + Turborepo. From the repo root:
 
 | Script                 | What it runs                                |
 | ---------------------- | ------------------------------------------- |
-| `bun run dev:api`      | Bun API (`apps/api`) on `:3000`             |
-| `bun run dev:web`      | Next.js UI (`apps/web`) on `:3001`          |
+| `bun run dev:api`      | Bun API (`apps/api`) on `:3132`             |
+| `bun run dev:web`      | Next.js UI (`apps/web`) on `:3133`          |
 | `bun run setup:gbrain` | Register shared-source + OAuth + demo users |
 | `bun run check-types`  | Typecheck workspace packages                |
 
@@ -249,7 +249,7 @@ gbrain serve --http --port 3131
 bun run dev:api
 ```
 
-Listens on `http://localhost:3000` (override with `PORT`).
+Listens on `http://localhost:3132` (override with `PORT`).
 
 ### 6. Start Next.js UI (terminal 3)
 
@@ -257,7 +257,7 @@ Listens on `http://localhost:3000` (override with `PORT`).
 bun run dev:web
 ```
 
-Opens at `http://localhost:3001`. The browser calls the Bun API (`NEXT_PUBLIC_API_URL` / `API_URL`, default `http://localhost:3000`). Override via `apps/web/.env.local`.
+Opens at `http://localhost:3133`. The browser calls the Bun API (`NEXT_PUBLIC_API_URL` / `API_URL`, default `http://localhost:3132`). Override via `apps/web/.env.local`.
 
 ## Bun API (demo auth)
 
@@ -344,8 +344,8 @@ Note: gbrain MCP `think` truncates gathered pages to ~600 characters ([#2369](ht
 | `GBRAIN_EMBEDDING_MODEL`          | e.g. `ollama:nomic-embed-text`                                           |
 | `GBRAIN_EMBEDDING_DIMENSIONS`     | e.g. `768`                                                               |
 | `GBRAIN_MCP_BASE_URL`             | Default `http://localhost:3131`                                          |
-| `PORT`                            | Bun API port (default `3000`)                                            |
-| `API_URL` / `NEXT_PUBLIC_API_URL` | Next.js → Bun base URL (default `http://localhost:3000`)                 |
+| `PORT`                            | Bun API port (default `3132`)                                            |
+| `API_URL` / `NEXT_PUBLIC_API_URL` | Next.js → Bun base URL (default `http://localhost:3132`)                 |
 
 ## gbrain CLI (direct)
 

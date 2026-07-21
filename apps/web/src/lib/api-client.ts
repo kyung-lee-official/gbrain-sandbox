@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-const DEFAULT_API_URL = "http://localhost:3000";
+const DEFAULT_API_URL = "http://localhost:3132";
 
 export function apiBaseUrl(): string {
   return (

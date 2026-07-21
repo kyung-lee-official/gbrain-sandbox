@@ -27,9 +27,9 @@ export function oauthTokenUrl(): string {
 }
 
 export function serverPort(): number {
-  const raw = process.env.PORT ?? '3000';
+  const raw = process.env.PORT ?? '3132';
   const port = Number.parseInt(raw, 10);
-  if (!Number.isFinite(port) || port <= 0) return 3000;
+  if (!Number.isFinite(port) || port <= 0) return 3132;
   return port;
 }
 
