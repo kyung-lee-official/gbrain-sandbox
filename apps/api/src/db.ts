@@ -1,9 +1,14 @@
 import postgres from "postgres";
-import { appDatabaseUrl, DEMO_API_KEYS } from "./config.ts";
+import {
+	apiKeyForSeedUser,
+	appDatabaseUrl,
+	SEED_USER_IDS,
+} from "./config.ts";
 
 export type AppUser = {
 	id: string;
 	api_key: string;
+	created_at?: Date;
 };
 
 export type AppMessage = {
@@ -100,12 +105,75 @@ export async function migrate(): Promise<void> {
 	await s`CREATE INDEX IF NOT EXISTS app_messages_session_id_idx ON app_messages (session_id, created_at)`;
 }
 
-export async function upsertUser(user: AppUser): Promise<void> {
-	await db()`
+function mapUserRow(row: Record<string, unknown>): AppUser {
+	return {
+		id: row.id as string,
+		api_key: row.api_key as string,
+		created_at: row.created_at as Date | undefined,
+	};
+}
+
+export async function upsertUser(user: AppUser): Promise<AppUser> {
+	const rows = await db()`
     INSERT INTO app_users (id, api_key)
     VALUES (${user.id}, ${user.api_key})
     ON CONFLICT (id) DO UPDATE SET api_key = EXCLUDED.api_key
+    RETURNING id, api_key, created_at
   `;
+	const row = rows[0];
+	if (!row) throw new Error("upsertUser returned no row");
+	return mapUserRow(row as Record<string, unknown>);
+}
+
+export async function listUsers(): Promise<AppUser[]> {
+	const rows = await db()`
+    SELECT id, api_key, created_at FROM app_users ORDER BY id ASC
+  `;
+	return rows.map((row) => mapUserRow(row as Record<string, unknown>));
+}
+
+export async function getUserById(id: string): Promise<AppUser | null> {
+	const rows = await db()`
+    SELECT id, api_key, created_at FROM app_users WHERE id = ${id} LIMIT 1
+  `;
+	if (rows.length === 0) return null;
+	return mapUserRow(rows[0]! as Record<string, unknown>);
+}
+
+export async function createUser(id: string, apiKey: string): Promise<AppUser> {
+	const rows = await db()`
+    INSERT INTO app_users (id, api_key)
+    VALUES (${id}, ${apiKey})
+    RETURNING id, api_key, created_at
+  `;
+	const row = rows[0];
+	if (!row) throw new Error("createUser returned no row");
+	return mapUserRow(row as Record<string, unknown>);
+}
+
+export async function updateUserApiKey(
+	id: string,
+	apiKey: string,
+): Promise<AppUser | null> {
+	const rows = await db()`
+    UPDATE app_users SET api_key = ${apiKey}
+    WHERE id = ${id}
+    RETURNING id, api_key, created_at
+  `;
+	if (rows.length === 0) return null;
+	return mapUserRow(rows[0]! as Record<string, unknown>);
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+	const rows = await db()`
+    DELETE FROM app_users WHERE id = ${id} RETURNING id
+  `;
+	return rows.length > 0;
+}
+
+export async function countUsers(): Promise<number> {
+	const rows = await db()`SELECT COUNT(*)::int AS n FROM app_users`;
+	return (rows[0]?.n as number) ?? 0;
 }
 
 export async function upsertGbrainAuth(auth: GbrainAuth): Promise<void> {
@@ -136,11 +204,10 @@ export async function getGbrainAuth(): Promise<GbrainAuth | null> {
 
 export async function getUserByApiKey(apiKey: string): Promise<AppUser | null> {
 	const rows = await db()`
-    SELECT id, api_key FROM app_users WHERE api_key = ${apiKey} LIMIT 1
+    SELECT id, api_key, created_at FROM app_users WHERE api_key = ${apiKey} LIMIT 1
   `;
 	if (rows.length === 0) return null;
-	const row = rows[0]!;
-	return { id: row.id as string, api_key: row.api_key as string };
+	return mapUserRow(rows[0]! as Record<string, unknown>);
 }
 
 export async function getOrCreateSession(userId: string): Promise<string> {
@@ -258,11 +325,18 @@ export async function searchMemoriesByUser(
 	}));
 }
 
-export async function seedDemoUsersIfEmpty(): Promise<void> {
-	const count = await db()`SELECT COUNT(*)::int AS n FROM app_users`;
-	if ((count[0]?.n as number) > 0) return;
-
-	for (const [id, apiKey] of Object.entries(DEMO_API_KEYS)) {
-		await upsertUser({ id, api_key: apiKey });
+/** Upsert the six seed users into `app_users` and drop legacy `bob`. */
+export async function seedAppUsers(): Promise<AppUser[]> {
+	const seeded: AppUser[] = [];
+	for (const id of SEED_USER_IDS) {
+		seeded.push(await upsertUser({ id, api_key: apiKeyForSeedUser(id) }));
 	}
+	await deleteUser("bob");
+	return seeded;
+}
+
+/** On API boot: seed only when the table is empty. */
+export async function seedDemoUsersIfEmpty(): Promise<void> {
+	if ((await countUsers()) > 0) return;
+	await seedAppUsers();
 }

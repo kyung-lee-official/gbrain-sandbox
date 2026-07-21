@@ -6,7 +6,7 @@
  */
 import {
 	appDatabaseUrl,
-	DEMO_API_KEYS,
+	SEED_USER_IDS,
 	SHARED_OAUTH_CLIENT_NAME,
 	SHARED_SOURCE_ID,
 } from "../src/config.ts";
@@ -14,8 +14,8 @@ import {
 	closeDb,
 	getGbrainAuth,
 	migrate,
+	seedAppUsers,
 	upsertGbrainAuth,
-	upsertUser,
 } from "../src/db.ts";
 
 /** Monorepo root (apps/api/scripts → ../../..) — gbrain + shared-source live here. */
@@ -188,10 +188,12 @@ async function main(): Promise<void> {
 	});
 	console.log(`  oauth_client_id=${oauth.clientId}`);
 
-	for (const [id, apiKey] of Object.entries(DEMO_API_KEYS)) {
-		await upsertUser({ id, api_key: apiKey });
-		console.log(`  demo user ${id}: api_key=${apiKey}`);
+	console.log("Seeding app users into app_users...");
+	const users = await seedAppUsers();
+	for (const user of users) {
+		console.log(`  user ${user.id}: api_key=${user.api_key}`);
 	}
+	console.log(`  (removed legacy bob if present; seed ids: ${SEED_USER_IDS.join(", ")})`);
 
 	console.log("\nSetup complete.");
 	console.log("Start gbrain: gbrain serve --http --port 3131");

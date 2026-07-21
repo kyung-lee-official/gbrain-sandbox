@@ -35,11 +35,11 @@ Requires **gbrain ≥ 0.42.62** (monorepo subdir sync / `--src-subpath`). On Win
 flowchart TB
   subgraph clients [Clients]
     Web[Next.js :3001]
-    Lily[Lily / Bob]
+    Lily[App users]
   end
 
   subgraph bun [Bun API :3000]
-    Auth[Auth demo-key]
+    Auth[Auth api-key]
     Remember["POST /remember"]
     Query["POST /query<br/>mode think|query|search"]
     Mem[(app_memories FTS)]
@@ -146,16 +146,16 @@ Copy `.env.example` to `.env` and fill in values (keep `.env` at the **repo root
 bun run setup:gbrain
 ```
 
-Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, `read` on shared), stores it in `app_gbrain_auth`, and seeds demo users Lily/Bob. Re-runs skip existing source/OAuth unless you pass `-- --force-oauth`.
+Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, `read` on shared), stores it in `app_gbrain_auth`, and **upserts six seed users** into `app_users` (Lily, Haewon, Sullyoon, Bae, Jiwoo, Kyujin) while removing legacy `bob`. Re-runs skip existing OAuth unless you pass `-- --force-oauth`; users are always re-upserted.
 
 #### How Bun authenticates to gbrain (MCP)
 
 Two different “Bearer” tokens show up in this project — do not confuse them:
 
-| Token                                           | Who issues it              | Who uses it                                       | Lifetime                                             |
-| ----------------------------------------------- | -------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
-| Demo API key (`demo-key-lily` / `demo-key-bob`) | This Bun app (`app_users`) | Browser / curl → Bun (`POST /query`, `/remember`) | Permanent until you change the row                   |
-| gbrain OAuth **access token**                   | gbrain `/token`            | Bun → gbrain MCP (`/mcp`)                         | Short-lived (cached in Bun memory until near expiry) |
+| Token                          | Who issues it              | Who uses it                                                       | Lifetime                                             |
+| ------------------------------ | -------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
+| Demo API key (`demo-key-<id>`) | This Bun app (`app_users`) | Browser / curl → Bun (`POST /query`, `/remember`, user mutations) | Permanent until you change the row                   |
+| gbrain OAuth **access token**  | gbrain `/token`            | Bun → gbrain MCP (`/mcp`)                                         | Short-lived (cached in Bun memory until near expiry) |
 
 Setup registers a long-lived **OAuth client** with gbrain. Equivalent CLI (run from the repo root; `setup:gbrain` does this for you):
 
@@ -167,7 +167,7 @@ gbrain auth register-client sandbox-shared \
   --federated-read shared-source
 ```
 
-gbrain returns `client_id` + `client_secret`; Bun saves them in `app_gbrain_auth` (single row `id = 'default'`). Those credentials stay valid until you revoke/re-register (e.g. `--force-oauth`). They are **not** Lily/Bob accounts and are **not** the Admin Token printed by `gbrain serve` (that is only for `http://localhost:3131/admin`).
+gbrain returns `client_id` + `client_secret`; Bun saves them in `app_gbrain_auth` (single row `id = 'default'`). Those credentials stay valid until you revoke/re-register (e.g. `--force-oauth`). They are **not** app user accounts and are **not** the Admin Token printed by `gbrain serve` (that is only for `http://localhost:3131/admin`).
 
 At runtime, when the Bun API needs shared knowledge:
 
@@ -183,7 +183,7 @@ sequenceDiagram
   participant Gbrain as gbrain serve
   participant DB as app_gbrain_auth
   participant Bun as Bun API
-  participant User as Client (Lily/Bob key)
+  participant User as Client (user api key)
 
   Setup->>Gbrain: auth register-client sandbox-shared
   Gbrain-->>Setup: client_id + client_secret
@@ -220,13 +220,18 @@ Opens at `http://localhost:3001`. Server Actions call the Bun API (`API_URL`, de
 
 ## Bun API (demo auth)
 
-| Endpoint         | Auth                                                    | Body                                    |
-| ---------------- | ------------------------------------------------------- | --------------------------------------- |
-| `GET /health`    | none                                                    | —                                       |
-| `POST /query`    | `Authorization: Bearer demo-key-lily` or `demo-key-bob` | `{ "message": "...", "mode": "think" }` |
-| `POST /remember` | same                                                    | `{ "content": "..." }`                  |
+| Endpoint            | Auth                      | Body                                    |
+| ------------------- | ------------------------- | --------------------------------------- |
+| `GET /health`       | none                      | —                                       |
+| `GET /users`        | none                      | —                                       |
+| `POST /users`       | Bearer if any users exist | `{ "id": "...", "apiKey?" }`            |
+| `GET /users/:id`    | none                      | —                                       |
+| `PATCH /users/:id`  | Bearer                    | `{ "apiKey?" }` (omit to regenerate)    |
+| `DELETE /users/:id` | Bearer                    | —                                       |
+| `POST /query`       | Bearer                    | `{ "message": "...", "mode": "think" }` |
+| `POST /remember`    | Bearer                    | `{ "content": "..." }`                  |
 
-`mode` is `think` (default), `query`, or `search`. Request/response shapes, errors, and curl examples: [`docs/API.md`](docs/API.md).
+Seed users (after `bun run setup:gbrain`): `lily`, `haewon`, `sullyoon`, `bae`, `jiwoo`, `kyujin` with keys `demo-key-<id>`. `mode` is `think` (default), `query`, or `search`. Full contract: [`docs/API.md`](docs/API.md).
 
 ## Maintainer workflow (shared only)
 
@@ -241,13 +246,13 @@ gbrain walks up from `./shared-source` to the monorepo `.git` and imports only t
 
 ## Postgres tables (Bun)
 
-| Table             | Purpose                                                                |
-| ----------------- | ---------------------------------------------------------------------- |
-| `app_users`       | Demo users + API keys (`lily` / `bob`)                                 |
-| `app_gbrain_auth` | Long-lived gbrain OAuth **client** id/secret (app → MCP; not per-user) |
-| `app_memories`    | Personal notes (`user_id` + `slug` + `content`)                        |
-| `app_sessions`    | One active thread per user                                             |
-| `app_messages`    | Chat history                                                           |
+| Table             | Purpose                                                                   |
+| ----------------- | ------------------------------------------------------------------------- |
+| `app_users`       | App users + API keys (seeded: lily, haewon, sullyoon, bae, jiwoo, kyujin) |
+| `app_gbrain_auth` | Long-lived gbrain OAuth **client** id/secret (app → MCP; not per-user)    |
+| `app_memories`    | Personal notes (`user_id` + `slug` + `content`)                           |
+| `app_sessions`    | One active thread per user                                                |
+| `app_messages`    | Chat history                                                              |
 
 `app_gbrain_auth` columns: `id` (always `default`), `oauth_client_id`, `oauth_client_secret`, `updated_at`. gbrain does **not** read this table — it is Bun’s private copy of the client credentials issued at setup.
 **`slug`:** short unique id for one memory note per user (e.g. `memory/note-1729123456789`). Auto-assigned on `POST /remember`; same slug for that user updates the row. Injected into the synthesis prompt as `[slug]` for reference.

@@ -33,10 +33,21 @@ export function serverPort(): number {
   return port;
 }
 
-export const DEMO_API_KEYS: Record<string, string> = {
-  lily: 'demo-key-lily',
-  bob: 'demo-key-bob',
-};
+/** Seeded into `app_users` by setup / empty-DB boot (ids are lowercase). */
+export const SEED_USER_IDS = [
+  'lily',
+  'haewon',
+  'sullyoon',
+  'bae',
+  'jiwoo',
+  'kyujin',
+] as const;
+
+export type SeedUserId = (typeof SEED_USER_IDS)[number];
+
+export function apiKeyForSeedUser(id: string): string {
+  return `demo-key-${id}`;
+}
 
 export const SHARED_SOURCE_ID = 'shared-source';
 export const SHARED_OAUTH_CLIENT_NAME = 'sandbox-shared';

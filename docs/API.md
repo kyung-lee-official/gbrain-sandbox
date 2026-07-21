@@ -6,23 +6,29 @@ All responses are JSON (`Content-Type: application/json`).
 
 ## Auth
 
-| Endpoint         | Auth                              |
-| ---------------- | --------------------------------- |
-| `GET /health`    | none                              |
-| `POST /query`    | `Authorization: Bearer <api-key>` |
-| `POST /remember` | `Authorization: Bearer <api-key>` |
+| Endpoint                                | Auth                                                |
+| --------------------------------------- | --------------------------------------------------- |
+| `GET /health`                           | none                                                |
+| `GET /users`, `GET /users/:id`          | none (sandbox convenience)                          |
+| `POST /users`                           | Bearer if any users exist; open when table is empty |
+| `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                   |
+| `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                   |
 
-Demo keys (after `bun run setup:gbrain` from the repo root):
+Seed users (after `bun run setup:gbrain`; stored in `app_users`):
 
-| User | API key         |
-| ---- | --------------- |
-| Lily | `demo-key-lily` |
-| Bob  | `demo-key-bob`  |
+| User id    | Default API key     |
+| ---------- | ------------------- |
+| `lily`     | `demo-key-lily`     |
+| `haewon`   | `demo-key-haewon`   |
+| `sullyoon` | `demo-key-sullyoon` |
+| `bae`      | `demo-key-bae`      |
+| `jiwoo`    | `demo-key-jiwoo`    |
+| `kyujin`   | `demo-key-kyujin`   |
 
 Missing or unknown key → `401`:
 
 ```json
-{ "error": "Unauthorized. Use Authorization: Bearer <demo-api-key>." }
+{ "error": "Unauthorized. Use Authorization: Bearer <api-key>." }
 ```
 
 ## Endpoints
@@ -37,9 +43,54 @@ Liveness check. No auth.
 { "ok": true }
 ```
 
+### `GET /users`
+
+List all app users.
+
+**200**
+
+```json
+{
+  "users": [{ "id": "lily", "apiKey": "demo-key-lily", "createdAt": "..." }]
+}
+```
+
+### `POST /users`
+
+Create a user. Requires Bearer when users already exist.
+
+**Request**
+
+```json
+{ "id": "mina", "apiKey": "optional-custom-key" }
+```
+
+| Field    | Required | Notes                                            |
+| -------- | -------- | ------------------------------------------------ |
+| `id`     | yes      | Lowercase; `^[a-z][a-z0-9_-]{0,63}$`             |
+| `apiKey` | no       | Generated as `demo-key-<id>-<suffix>` if omitted |
+
+**201** — same shape as a user object. **409** if id or key conflicts.
+
+### `GET /users/:id`
+
+**200** user object, or **404**.
+
+### `PATCH /users/:id`
+
+Requires Bearer. Body `{ "apiKey?" }` — omit `apiKey` to regenerate.
+
+**200** updated user, or **404** / **409**.
+
+### `DELETE /users/:id`
+
+Requires Bearer. Cascades memories, sessions, and messages.
+
+**200** `{ "deleted": true, "id": "..." }`, or **404**.
+
 ### `POST /query`
 
-Ask against shared gbrain knowledge. Optional `mode` selects the gbrain tool.
+Ask against shared gbrain knowledge. Optional `mode` selects the tool path.
 
 **Request**
 
@@ -50,16 +101,16 @@ Ask against shared gbrain knowledge. Optional `mode` selects the gbrain tool.
 }
 ```
 
-| Field     | Required | Notes                                                                 |
-| --------- | -------- | --------------------------------------------------------------------- |
-| `message` | yes      | Trimmed; empty → `400`                                                |
+| Field     | Required | Notes                                                                |
+| --------- | -------- | -------------------------------------------------------------------- |
+| `message` | yes      | Trimmed; empty → `400`                                               |
 | `mode`    | no       | `think` (default), `query` (hybrid retrieval), or `search` (keyword) |
 
-| Mode     | gbrain tool | Behavior                                                                 |
-| -------- | ----------- | ------------------------------------------------------------------------ |
+| Mode     | gbrain tool                        | Behavior                                                                             |
+| -------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
 | `think`  | `query` + `get_page`, then Bun LLM | Hybrid retrieve, load full page(s), synthesize with DeepSeek; chat + personal memory |
-| `query`  | `query`     | Hybrid retrieval only (no LLM, no chat write)                            |
-| `search` | `search`    | Keyword / BM25 retrieval only (no LLM, no chat write)                    |
+| `query`  | `query`                            | Hybrid retrieval only (no LLM, no chat write)                                        |
+| `search` | `search`                           | Keyword / BM25 retrieval only (no LLM, no chat write)                                |
 
 **200** (`mode: "think"`)
 
@@ -82,20 +133,20 @@ Ask against shared gbrain knowledge. Optional `mode` selects the gbrain tool.
 }
 ```
 
-| Field       | Meaning                                                      |
-| ----------- | ------------------------------------------------------------ |
-| `userId`    | Authenticated user                                           |
-| `sessionId` | Present for `think` only (one active thread per user)        |
-| `mode`      | Echo of the selected mode                                    |
+| Field       | Meaning                                                          |
+| ----------- | ---------------------------------------------------------------- |
+| `userId`    | Authenticated user                                               |
+| `sessionId` | Present for `think` only (one active thread per user)            |
+| `mode`      | Echo of the selected mode                                        |
 | `answer`    | Synthesis text (`think`) or retrieval payload (`query`/`search`) |
 
 **Errors**
 
-| Status | When                                                              |
-| ------ | ----------------------------------------------------------------- |
-| `400`  | Invalid JSON, empty `message`, or invalid `mode`                  |
-| `401`  | Missing/invalid Bearer token                                      |
-| `502`  | gbrain OAuth/MCP tool failed, or DeepSeek synthesis failed (`error` is the message) |
+| Status | When                                                       |
+| ------ | ---------------------------------------------------------- |
+| `400`  | Invalid JSON, empty `message`, or invalid `mode`           |
+| `401`  | Missing/invalid Bearer token                               |
+| `502`  | gbrain OAuth/MCP tool failed, or DeepSeek synthesis failed |
 
 ### `POST /remember`
 
@@ -142,40 +193,38 @@ Save a personal note for the authenticated user only (`app_memories`). Does not 
 
 ```bash
 # Health
-curl -s http://localhost:3000/health
+curl.exe -s --max-time 5 http://localhost:3000/health
+
+# List users
+curl.exe -s --max-time 5 http://localhost:3000/users
+
+# Create user (signed in as lily)
+curl.exe -s --max-time 10 -X POST http://localhost:3000/users \
+  -H "Authorization: Bearer demo-key-lily" \
+  -H "Content-Type: application/json" \
+  -d "{\"id\":\"mina\"}"
 
 # think (default) — query + get_page + Bun DeepSeek synthesis
-curl -s -X POST http://localhost:3000/query \
+curl.exe -s --max-time 60 -X POST http://localhost:3000/query \
   -H "Authorization: Bearer demo-key-lily" \
   -H "Content-Type: application/json" \
   -d "{\"message\":\"What is the sandbox verification protocol codename?\",\"mode\":\"think\"}"
 
 # query — hybrid retrieval (no LLM)
-curl -s -X POST http://localhost:3000/query \
-  -H "Authorization: Bearer demo-key-lily" \
+curl.exe -s --max-time 30 -X POST http://localhost:3000/query \
+  -H "Authorization: Bearer demo-key-haewon" \
   -H "Content-Type: application/json" \
   -d "{\"message\":\"What passphrase unlocks the sandbox test vault?\",\"mode\":\"query\"}"
 
-# search — keyword retrieval (no LLM)
-curl -s -X POST http://localhost:3000/query \
-  -H "Authorization: Bearer demo-key-lily" \
-  -H "Content-Type: application/json" \
-  -d "{\"message\":\"cerulean-moth\",\"mode\":\"search\"}"
-
 # Personal memory (app Postgres, Lily only)
-curl -s -X POST http://localhost:3000/remember \
+curl.exe -s --max-time 10 -X POST http://localhost:3000/remember \
   -H "Authorization: Bearer demo-key-lily" \
   -H "Content-Type: application/json" \
   -d "{\"content\":\"My favorite coffee is oat latte.\"}"
 
-curl -s -X POST http://localhost:3000/query \
-  -H "Authorization: Bearer demo-key-lily" \
-  -H "Content-Type: application/json" \
-  -d "{\"message\":\"What is my favorite coffee?\"}"
-
-# Bob cannot see Lily's app_memories
-curl -s -X POST http://localhost:3000/query \
-  -H "Authorization: Bearer demo-key-bob" \
+# Haewon cannot see Lily's app_memories
+curl.exe -s --max-time 60 -X POST http://localhost:3000/query \
+  -H "Authorization: Bearer demo-key-haewon" \
   -H "Content-Type: application/json" \
   -d "{\"message\":\"What is Lily favorite coffee?\"}"
 ```

@@ -18,6 +18,10 @@ export default async function Home() {
             ? "API health: ok"
             : `API health: down${health.error ? ` (${health.error})` : ""}`}
         </p>
+        <p>
+          Users live in Postgres <code>app_users</code>. Use the sidebar to
+          sign in and manage accounts.
+        </p>
       </header>
       <DemoPanel />
     </main>
