@@ -6,12 +6,12 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
   ApiError,
+  type ApiUser,
   createUser,
   deleteUser,
   listUsers,
   regenerateUserKey,
   UserQueryKey,
-  type ApiUser,
 } from "@/lib/api";
 
 type Props = {
@@ -24,7 +24,10 @@ const createUserSchema = z.object({
     .string()
     .trim()
     .toLowerCase()
-    .regex(/^[a-z][a-z0-9_-]{0,63}$/, "Use a lowercase id (letter, then letters/digits/_/-)"),
+    .regex(
+      /^[a-z][a-z0-9_-]{0,63}$/,
+      "Use a lowercase id (letter, then letters/digits/_/-)",
+    ),
 });
 
 type CreateUserValues = z.infer<typeof createUserSchema>;
@@ -66,7 +69,8 @@ export function UserSidebar({ activeUserId, onSelectUser }: Props) {
 
   const regenerateMutation = useMutation({
     mutationFn: (id: string) => {
-      if (!activeApiKey) throw new Error("Sign in as a user to regenerate keys.");
+      if (!activeApiKey)
+        throw new Error("Sign in as a user to regenerate keys.");
       return regenerateUserKey({ id, actorApiKey: activeApiKey });
     },
     onSuccess: async (user) => {
@@ -95,27 +99,31 @@ export function UserSidebar({ activeUserId, onSelectUser }: Props) {
 
   const actionError =
     (createMutation.isError ? errorMessage(createMutation.error) : null) ||
-    (regenerateMutation.isError ? errorMessage(regenerateMutation.error) : null) ||
+    (regenerateMutation.isError
+      ? errorMessage(regenerateMutation.error)
+      : null) ||
     (deleteMutation.isError ? errorMessage(deleteMutation.error) : null) ||
     (usersQuery.isError ? errorMessage(usersQuery.error) : null);
 
   return (
     <aside className="sticky top-4 flex flex-col gap-3 rounded-md border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="m-0 font-display text-lg text-ink">Users</h2>
+        <h2 className="m-0 font-display text-ink text-lg">Users</h2>
         <button
           type="button"
-          className="rounded border border-line bg-transparent px-2 py-0.5 text-xs text-muted hover:border-ink hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded border border-line bg-transparent px-2 py-0.5 text-muted text-xs hover:border-ink hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
           onClick={() => void usersQuery.refetch()}
           disabled={busy}
         >
           Refresh
         </button>
       </div>
-      <p className="m-0 text-xs text-muted">
+      <p className="m-0 text-muted text-xs">
         Click a user to sign in. Highlighted = current session.
       </p>
-      {actionError ? <p className="m-0 text-sm text-danger">{actionError}</p> : null}
+      {actionError ? (
+        <p className="m-0 text-danger text-sm">{actionError}</p>
+      ) : null}
 
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
         {users.map((user) => {
@@ -132,13 +140,17 @@ export function UserSidebar({ activeUserId, onSelectUser }: Props) {
                 onClick={() => onSelectUser(user)}
                 disabled={busy}
               >
-                <span className="font-display text-base">{displayName(user.id)}</span>
-                <code className="break-all font-mono text-xs text-muted">{user.apiKey}</code>
+                <span className="font-display text-base">
+                  {displayName(user.id)}
+                </span>
+                <code className="break-all font-mono text-muted text-xs">
+                  {user.apiKey}
+                </code>
               </button>
               <div className="mt-1 flex gap-1.5 pl-0.5">
                 <button
                   type="button"
-                  className="rounded border border-line bg-transparent px-2 py-0.5 text-xs text-muted hover:border-ink hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded border border-line bg-transparent px-2 py-0.5 text-muted text-xs hover:border-ink hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => regenerateMutation.mutate(user.id)}
                   disabled={busy || !activeApiKey}
                   title="Regenerate API key"
@@ -147,7 +159,7 @@ export function UserSidebar({ activeUserId, onSelectUser }: Props) {
                 </button>
                 <button
                   type="button"
-                  className="rounded border border-line bg-transparent px-2 py-0.5 text-xs text-muted hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded border border-line bg-transparent px-2 py-0.5 text-muted text-xs hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => {
                     if (
                       !window.confirm(
@@ -169,8 +181,10 @@ export function UserSidebar({ activeUserId, onSelectUser }: Props) {
       </ul>
 
       <form
-        className="flex flex-col gap-2 border-t border-line pt-3"
-        onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}
+        className="flex flex-col gap-2 border-line border-t pt-3"
+        onSubmit={createForm.handleSubmit((values) =>
+          createMutation.mutate(values),
+        )}
       >
         <label className="flex flex-col gap-1.5 text-sm">
           <span>New user id</span>
@@ -182,7 +196,9 @@ export function UserSidebar({ activeUserId, onSelectUser }: Props) {
           />
         </label>
         {createForm.formState.errors.id ? (
-          <p className="m-0 text-sm text-danger">{createForm.formState.errors.id.message}</p>
+          <p className="m-0 text-danger text-sm">
+            {createForm.formState.errors.id.message}
+          </p>
         ) : null}
         <button
           type="submit"
