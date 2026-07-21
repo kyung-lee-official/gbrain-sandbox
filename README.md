@@ -216,7 +216,7 @@ Listens on `http://localhost:3000` (override with `PORT`).
 bun run dev:web
 ```
 
-Opens at `http://localhost:3001`. Server Actions call the Bun API (`API_URL`, default `http://localhost:3000`). Override via `apps/web/.env.local`.
+Opens at `http://localhost:3001`. The browser calls the Bun API (`NEXT_PUBLIC_API_URL` / `API_URL`, default `http://localhost:3000`). Override via `apps/web/.env.local`.
 
 ## Bun API (demo auth)
 
@@ -304,7 +304,7 @@ Note: gbrain MCP `think` truncates gathered pages to ~600 characters ([#2369](ht
 | `GBRAIN_EMBEDDING_DIMENSIONS` | e.g. `768`                                                               |
 | `GBRAIN_MCP_BASE_URL`         | Default `http://localhost:3131`                                          |
 | `PORT`                        | Bun API port (default `3000`)                                            |
-| `API_URL`                     | Next.js → Bun base URL (default `http://localhost:3000`)                 |
+| `API_URL` / `NEXT_PUBLIC_API_URL` | Next.js → Bun base URL (default `http://localhost:3000`) |
 
 ## gbrain CLI (direct)
 

@@ -1,26 +1,19 @@
 import { apiBaseUrl } from "@/lib/api";
-import { checkApiHealth } from "./actions";
 import { DemoPanel } from "./demo-panel";
 
-export default async function Home() {
-  const health = await checkApiHealth();
+export default function Home() {
   const apiUrl = apiBaseUrl();
 
   return (
-    <main className="page">
-      <header>
-        <h1>gbrain-sandbox</h1>
-        <p>
-          Next.js UI talking to Bun API at <code>{apiUrl}</code>
+    <main className="mx-auto max-w-6xl px-5 py-8 pb-12">
+      <header className="mb-2">
+        <h1 className="mb-1 font-display text-3xl text-ink">gbrain-sandbox</h1>
+        <p className="my-1 text-sm text-muted">
+          Next.js UI talking to Bun API at <code className="font-mono text-sm">{apiUrl}</code>
         </p>
-        <p className={health.ok ? "ok" : "err"}>
-          {health.ok
-            ? "API health: ok"
-            : `API health: down${health.error ? ` (${health.error})` : ""}`}
-        </p>
-        <p>
-          Users live in Postgres <code>app_users</code>. Use the sidebar to
-          sign in and manage accounts.
+        <p className="my-1 text-sm text-muted">
+          Users live in Postgres <code className="font-mono text-sm">app_users</code>. Use the
+          sidebar to sign in and manage accounts.
         </p>
       </header>
       <DemoPanel />

@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import type { ApiUser, AskMode } from "@/lib/api";
-import { submitQuery, submitRemember } from "./actions";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
+import {
+  ApiError,
+  getHealth,
+  listUsers,
+  postQuery,
+  postRemember,
+  UserQueryKey,
+  type ApiUser,
+  type AskMode,
+} from "@/lib/api";
 import { ResponseView, type ApiPayload } from "./response-view";
 import { UserSidebar } from "./user-sidebar";
 
@@ -13,108 +25,201 @@ const MODE_HELP: Record<AskMode, string> = {
   search: "gbrain search — keyword / BM25 retrieval, no LLM",
 };
 
+const rememberSchema = z.object({
+  content: z.string().trim().min(1, "content is required"),
+});
+
+const askSchema = z.object({
+  mode: z.enum(["think", "query", "search"]),
+  message: z.string().trim().min(1, "message is required"),
+});
+
+type RememberValues = z.infer<typeof rememberSchema>;
+type AskValues = z.infer<typeof askSchema>;
+
+function errorMessage(err: unknown): string {
+  if (err instanceof ApiError) return err.message;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 export function DemoPanel() {
-  const [users, setUsers] = useState<ApiUser[]>([]);
   const [active, setActive] = useState<ApiUser | null>(null);
-  const [mode, setMode] = useState<AskMode>("think");
   const [payload, setPayload] = useState<ApiPayload | null>(null);
-  const [pending, startTransition] = useTransition();
+
+  const healthQuery = useQuery({
+    queryKey: UserQueryKey.Health,
+    queryFn: getHealth,
+  });
+
+  const usersQuery = useQuery({
+    queryKey: UserQueryKey.List,
+    queryFn: listUsers,
+  });
 
   useEffect(() => {
     if (active) return;
-    if (users.length === 0) return;
+    const users = usersQuery.data;
+    if (!users || users.length === 0) return;
     const lily = users.find((u) => u.id === "lily");
     setActive(lily ?? users[0] ?? null);
-  }, [users, active]);
+  }, [usersQuery.data, active]);
 
-  function onSelectUser(user: ApiUser) {
-    if (!user.id) {
-      setActive(null);
-      return;
-    }
-    setActive(user);
-    setPayload(null);
-  }
+  const rememberForm = useForm<RememberValues>({
+    resolver: zodResolver(rememberSchema),
+    defaultValues: { content: "" },
+  });
 
-  function onRemember(formData: FormData) {
-    if (!active) return;
-    formData.set("apiKey", active.apiKey);
-    startTransition(async () => {
-      setPayload(null);
-      const res = await submitRemember(formData);
-      setPayload(res);
-    });
-  }
+  const askForm = useForm<AskValues>({
+    resolver: zodResolver(askSchema),
+    defaultValues: { mode: "think", message: "" },
+  });
 
-  function onQuery(formData: FormData) {
-    if (!active) return;
-    formData.set("apiKey", active.apiKey);
-    formData.set("mode", mode);
-    startTransition(async () => {
-      setPayload(null);
-      const res = await submitQuery(formData);
-      setPayload(res);
-    });
-  }
+  const mode = useWatch({ control: askForm.control, name: "mode" });
+
+  const rememberMutation = useMutation({
+    mutationFn: (values: RememberValues) => {
+      if (!active) throw new Error("Select a signed-in user.");
+      return postRemember({ apiKey: active.apiKey, content: values.content });
+    },
+    onSuccess: (data) => {
+      setPayload(data);
+      rememberForm.reset({ content: "" });
+    },
+    onError: (err) => setPayload({ error: errorMessage(err) }),
+  });
+
+  const askMutation = useMutation({
+    mutationFn: (values: AskValues) => {
+      if (!active) throw new Error("Select a signed-in user.");
+      return postQuery({
+        apiKey: active.apiKey,
+        message: values.message,
+        mode: values.mode,
+      });
+    },
+    onSuccess: (data) => {
+      setPayload(data);
+      askForm.reset({ mode: askForm.getValues("mode"), message: "" });
+    },
+    onError: (err) => setPayload({ error: errorMessage(err) }),
+  });
+
+  const pending = rememberMutation.isPending || askMutation.isPending;
+  const healthOk = healthQuery.data?.ok === true;
+  const healthError = healthQuery.isError
+    ? errorMessage(healthQuery.error)
+    : null;
 
   return (
-    <div className="app-shell">
-      <UserSidebar
-        activeUserId={active?.id ?? null}
-        onSelectUser={onSelectUser}
-        onUsersChange={setUsers}
-      />
-      <div className="panel">
-        <p className="signed-in">
-          Signed in as{" "}
-          <strong>
-            {active ? active.id : "nobody — pick a user in the sidebar"}
-          </strong>
-        </p>
+    <div>
+      <p
+        className={
+          healthQuery.isLoading
+            ? "my-1 text-sm text-muted"
+            : healthOk
+              ? "my-1 text-sm text-ok"
+              : "my-1 text-sm text-danger"
+        }
+      >
+        {healthQuery.isLoading
+          ? "API health: checking…"
+          : healthOk
+            ? "API health: ok"
+            : `API health: down${healthError ? ` (${healthError})` : ""}`}
+      </p>
 
-        <form action={onRemember} className="card">
-          <h2>Remember</h2>
-          <p>POST /remember — personal note in app Postgres</p>
-          <textarea
-            name="content"
-            rows={3}
-            placeholder="My favorite coffee is oat latte."
-            required
-            disabled={pending || !active}
-          />
-          <button type="submit" disabled={pending || !active}>
-            Save note
-          </button>
-        </form>
+      <div className="mt-6 grid grid-cols-1 items-start gap-5 md:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
+        <UserSidebar
+          activeUserId={active?.id ?? null}
+          onSelectUser={(user) => {
+            setActive(user);
+            setPayload(null);
+          }}
+        />
 
-        <form action={onQuery} className="card">
-          <h2>Ask</h2>
-          <p>POST /query — {MODE_HELP[mode]}</p>
-          <label className="field">
-            <span>Mode</span>
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as AskMode)}
+        <div className="flex flex-col gap-4">
+          <p className="m-0 text-sm text-muted">
+            Signed in as{" "}
+            <strong className="text-ink">
+              {active ? active.id : "nobody — pick a user in the sidebar"}
+            </strong>
+          </p>
+
+          <form
+            className="flex flex-col gap-2.5 rounded-md border border-line bg-surface p-4"
+            onSubmit={rememberForm.handleSubmit((values) => {
+              setPayload(null);
+              rememberMutation.mutate(values);
+            })}
+          >
+            <h2 className="m-0 font-display text-lg text-ink">Remember</h2>
+            <p className="m-0 text-sm text-muted">POST /remember — personal note in app Postgres</p>
+            <textarea
+              className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
+              rows={3}
+              placeholder="My favorite coffee is oat latte."
               disabled={pending || !active}
+              {...rememberForm.register("content")}
+            />
+            {rememberForm.formState.errors.content ? (
+              <p className="m-0 text-sm text-danger">
+                {rememberForm.formState.errors.content.message}
+              </p>
+            ) : null}
+            <button
+              type="submit"
+              className="self-start rounded border border-accent bg-accent px-3.5 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={pending || !active || rememberForm.formState.isSubmitting}
             >
-              <option value="think">think</option>
-              <option value="query">query</option>
-              <option value="search">search</option>
-            </select>
-          </label>
-          <textarea
-            name="message"
-            rows={3}
-            placeholder="What is the sandbox verification protocol codename?"
-            required
-            disabled={pending || !active}
-          />
-          <button type="submit" disabled={pending || !active}>
-            Ask
-          </button>
-        </form>
+              Save note
+            </button>
+          </form>
 
-        <ResponseView pending={pending} payload={payload} />
+          <form
+            className="flex flex-col gap-2.5 rounded-md border border-line bg-surface p-4"
+            onSubmit={askForm.handleSubmit((values) => {
+              setPayload(null);
+              askMutation.mutate(values);
+            })}
+          >
+            <h2 className="m-0 font-display text-lg text-ink">Ask</h2>
+            <p className="m-0 text-sm text-muted">POST /query — {MODE_HELP[mode]}</p>
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span>Mode</span>
+              <select
+                className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
+                disabled={pending || !active}
+                {...askForm.register("mode")}
+              >
+                <option value="think">think</option>
+                <option value="query">query</option>
+                <option value="search">search</option>
+              </select>
+            </label>
+            <textarea
+              className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
+              rows={3}
+              placeholder="What is the sandbox verification protocol codename?"
+              disabled={pending || !active}
+              {...askForm.register("message")}
+            />
+            {askForm.formState.errors.message ? (
+              <p className="m-0 text-sm text-danger">
+                {askForm.formState.errors.message.message}
+              </p>
+            ) : null}
+            <button
+              type="submit"
+              className="self-start rounded border border-accent bg-accent px-3.5 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={pending || !active || askForm.formState.isSubmitting}
+            >
+              Ask
+            </button>
+          </form>
+
+          <ResponseView pending={pending} payload={payload} />
+        </div>
       </div>
     </div>
   );
