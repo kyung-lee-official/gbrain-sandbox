@@ -1,6 +1,8 @@
-import { slugForMemoryNote } from "./context.ts";
+import { answerWithHydratedPages } from "./answer.ts";
 import { serverPort } from "./config.ts";
+import { slugForMemoryNote } from "./context.ts";
 import {
+  type AppUser,
   countUsers,
   createUser,
   deleteUser,
@@ -15,9 +17,7 @@ import {
   searchMemoriesByUser,
   seedDemoUsersIfEmpty,
   updateUserApiKey,
-  type AppUser,
 } from "./db.ts";
-import { answerWithHydratedPages } from "./answer.ts";
 import { gbrainQueryHits, gbrainSearch } from "./gbrain-client.ts";
 import { logRetrievalHits, parseRetrievalHits } from "./retrieval.ts";
 
