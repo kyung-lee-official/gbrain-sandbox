@@ -2,12 +2,12 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
+import { useActiveUserStore } from "@/lib/active-user-store";
 import {
   ApiError,
-  type ApiUser,
   type AskMode,
   getHealth,
   listUsers,
@@ -46,8 +46,17 @@ function errorMessage(err: unknown): string {
 
 export function DemoPanel() {
   const queryClient = useQueryClient();
-  const [active, setActive] = useState<ApiUser | null>(null);
+  const activeUserId = useActiveUserStore((s) => s.activeUserId);
+  const setActiveUserId = useActiveUserStore((s) => s.setActiveUserId);
+  const [storeReady, setStoreReady] = useState(false);
   const [payload, setPayload] = useState<ApiPayload | null>(null);
+
+  useEffect(() => {
+    setStoreReady(useActiveUserStore.persist.hasHydrated());
+    return useActiveUserStore.persist.onFinishHydration(() => {
+      setStoreReady(true);
+    });
+  }, []);
 
   const healthQuery = useQuery({
     queryKey: UserQueryKey.Health,
@@ -59,13 +68,20 @@ export function DemoPanel() {
     queryFn: listUsers,
   });
 
+  const active = useMemo(() => {
+    const users = usersQuery.data;
+    if (!users || !activeUserId) return null;
+    return users.find((u) => u.id === activeUserId) ?? null;
+  }, [usersQuery.data, activeUserId]);
+
   useEffect(() => {
-    if (active) return;
+    if (!storeReady) return;
     const users = usersQuery.data;
     if (!users || users.length === 0) return;
+    if (activeUserId && users.some((u) => u.id === activeUserId)) return;
     const lily = users.find((u) => u.id === "lily");
-    setActive(lily ?? users[0] ?? null);
-  }, [usersQuery.data, active]);
+    setActiveUserId(lily?.id ?? users[0]?.id ?? null);
+  }, [storeReady, usersQuery.data, activeUserId, setActiveUserId]);
 
   const rememberForm = useForm<RememberValues>({
     resolver: zodResolver(rememberSchema),
@@ -145,7 +161,7 @@ export function DemoPanel() {
         <UserSidebar
           activeUserId={active?.id ?? null}
           onSelectUser={(user) => {
-            setActive(user);
+            setActiveUserId(user?.id ?? null);
             setPayload(null);
           }}
         />
