@@ -110,10 +110,51 @@ At scale, user count grows **rows** in `app_memories`, not filesystem repos or g
 
 ## Prerequisites
 
-- Postgres (`GBRAIN_DATABASE_URL`)
+- Postgres with **pgvector** (see below)
 - **gbrain ≥ 0.42.62**, `bun`, Ollama (`nomic-embed-text`), DeepSeek API key
 - `gbrain serve --http` on port **3131**
 - Required hydrate env vars (see `.env.example`) for think mode
+
+### Postgres
+
+Install Postgres locally (or use an existing instance). Create a database (e.g. `gbrain`), then point the repo root `.env` at it:
+
+```env
+GBRAIN_DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/gbrain
+```
+
+Optional: set `APP_DATABASE_URL` if Bun app tables should live elsewhere; otherwise they use `GBRAIN_DATABASE_URL`. gbrain needs the **`vector`** extension in that database (`CREATE EXTENSION vector;` after pgvector is installed).
+
+### Build Tools for Visual Studio (Windows, for pgvector)
+
+gbrain embeddings use pgvector. On Windows you compile it with MSVC.
+
+1. Download **[Build Tools for Visual Studio (latest)](https://visualstudio.microsoft.com/downloads)** (under _Tools for Visual Studio_).
+2. Run the installer and select the **Desktop development with C++** workload.
+3. In the optional components list, also select:
+   - **MSVC** Build Tools for **x64/x86**
+   - **Windows 11 SDK**
+
+### Compile pgvector (Windows)
+
+Open **x64 Native Tools Command Prompt for VS** as administrator (Start menu — match your Build Tools year). Set `PGROOT` to your Postgres install, then build and install:
+
+```cmd
+set "PGROOT=C:\Program Files\PostgreSQL\18"
+cd %TEMP%
+git clone --branch v0.8.5 https://github.com/pgvector/pgvector.git
+cd pgvector
+nmake /F Makefile.win
+nmake /F Makefile.win install
+```
+
+Adjust `PGROOT` and the clone tag to match your Postgres major version and a [pgvector release](https://github.com/pgvector/pgvector/releases). Then in `psql` (or any client) on the sandbox database:
+
+```sql
+CREATE EXTENSION vector;
+```
+
+If compile fails with missing `postgres.h`, check `PGROOT`. If you see architecture/`case value` errors, use the **x64** Native Tools prompt, run `nmake /F Makefile.win clean`, and rebuild.
 
 ## Gbrain: project vs global
 
@@ -289,22 +330,22 @@ Note: gbrain MCP `think` truncates gathered pages to ~600 characters ([#2369](ht
 
 ## Env vars
 
-| Variable                      | Purpose                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------ |
-| `GBRAIN_DATABASE_URL`         | gbrain + default app DB                                                  |
-| `APP_DATABASE_URL`            | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`)               |
-| `DEEPSEEK_API_KEY`            | Bun think-mode synthesis (required for `mode=think`)                     |
-| `GBRAIN_CHAT_MODEL`           | Default synthesis model id (e.g. `deepseek:deepseek-v4-flash`)           |
-| `SYNTHESIS_MODEL`             | Optional override; DeepSeek model id without `deepseek:` prefix          |
-| `HYDRATE_SCORE_RATIO`         | **Required** — min score vs top hit to include a page (e.g. `0.65`)      |
-| `HYDRATE_MAX_PAGES`           | **Required** — max pages to load per think request (e.g. `5`)            |
-| `HYDRATE_MAX_CHARS_PER_PAGE`  | **Required** — max chars per hydrated page (e.g. `8000`)                 |
-| `HYDRATE_MAX_TOTAL_CHARS`     | **Required** — max total hydrated chars per think request (e.g. `24000`) |
-| `GBRAIN_EMBEDDING_MODEL`      | e.g. `ollama:nomic-embed-text`                                           |
-| `GBRAIN_EMBEDDING_DIMENSIONS` | e.g. `768`                                                               |
-| `GBRAIN_MCP_BASE_URL`         | Default `http://localhost:3131`                                          |
-| `PORT`                        | Bun API port (default `3000`)                                            |
-| `API_URL` / `NEXT_PUBLIC_API_URL` | Next.js → Bun base URL (default `http://localhost:3000`) |
+| Variable                          | Purpose                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| `GBRAIN_DATABASE_URL`             | gbrain + default app DB                                                  |
+| `APP_DATABASE_URL`                | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`)               |
+| `DEEPSEEK_API_KEY`                | Bun think-mode synthesis (required for `mode=think`)                     |
+| `GBRAIN_CHAT_MODEL`               | Default synthesis model id (e.g. `deepseek:deepseek-v4-flash`)           |
+| `SYNTHESIS_MODEL`                 | Optional override; DeepSeek model id without `deepseek:` prefix          |
+| `HYDRATE_SCORE_RATIO`             | **Required** — min score vs top hit to include a page (e.g. `0.65`)      |
+| `HYDRATE_MAX_PAGES`               | **Required** — max pages to load per think request (e.g. `5`)            |
+| `HYDRATE_MAX_CHARS_PER_PAGE`      | **Required** — max chars per hydrated page (e.g. `8000`)                 |
+| `HYDRATE_MAX_TOTAL_CHARS`         | **Required** — max total hydrated chars per think request (e.g. `24000`) |
+| `GBRAIN_EMBEDDING_MODEL`          | e.g. `ollama:nomic-embed-text`                                           |
+| `GBRAIN_EMBEDDING_DIMENSIONS`     | e.g. `768`                                                               |
+| `GBRAIN_MCP_BASE_URL`             | Default `http://localhost:3131`                                          |
+| `PORT`                            | Bun API port (default `3000`)                                            |
+| `API_URL` / `NEXT_PUBLIC_API_URL` | Next.js → Bun base URL (default `http://localhost:3000`)                 |
 
 ## gbrain CLI (direct)
 
