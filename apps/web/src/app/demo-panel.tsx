@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -162,20 +161,6 @@ export function DemoPanel() {
             <p className="my-1 text-muted text-sm">
               Conversation UI for Bun API at{" "}
               <code className="font-mono text-sm">{apiUrl}</code>
-            </p>
-            <p className="my-1 text-muted text-sm">
-              Manage accounts on{" "}
-              <Link href="/auth" className="text-accent">
-                /auth
-              </Link>
-              . Personal notes live in{" "}
-              <Link
-                href={`/settings/${encodeURIComponent(active.id)}`}
-                className="text-accent"
-              >
-                Settings
-              </Link>
-              .
             </p>
             <p
               className={

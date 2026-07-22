@@ -94,7 +94,7 @@ export function ActiveUserPanel({ active }: { active: ApiUser | null }) {
     (sessionsQuery.isError ? errorMessage(sessionsQuery.error) : null);
 
   return (
-    <aside className="sticky top-0 flex h-dvh w-64 shrink-0 flex-col gap-3 overflow-y-auto border-line border-r bg-surface p-4">
+    <aside className="sticky top-0 flex h-dvh w-64 shrink-0 flex-col gap-3 border-line border-r bg-surface p-4">
       {!live ? (
         <p className="m-0 text-muted text-sm">
           Nobody signed in.{" "}
@@ -104,30 +104,16 @@ export function ActiveUserPanel({ active }: { active: ApiUser | null }) {
         </p>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="m-0 font-display text-ink text-lg">
-              {displayName(live.id)}
-            </h2>
-            <div className="flex shrink-0 gap-1">
-              <Link
-                href={`/settings/${encodeURIComponent(live.id)}`}
-                className="rounded border border-line bg-transparent px-2 py-0.5 text-muted text-xs no-underline hover:border-ink hover:text-ink"
-              >
-                Settings
-              </Link>
-              <Link
-                href="/auth"
-                className="rounded border border-line bg-transparent px-2 py-0.5 text-muted text-xs no-underline hover:border-ink hover:text-ink"
-              >
-                Switch Account
-              </Link>
-            </div>
-          </div>
+          <h2 className="m-0 shrink-0 font-display text-ink text-lg">
+            {displayName(live.id)}
+          </h2>
 
-          {err ? <p className="m-0 text-danger text-sm">{err}</p> : null}
+          {err ? (
+            <p className="m-0 shrink-0 text-danger text-sm">{err}</p>
+          ) : null}
 
-          <div className="flex flex-col gap-2 border-line border-t pt-3">
-            <div className="flex items-center justify-between gap-2">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto border-line border-t pt-3">
+            <div className="flex shrink-0 items-center justify-between gap-2">
               <h3 className="m-0 font-display text-base text-ink">Chats</h3>
               <button
                 type="button"
@@ -138,7 +124,7 @@ export function ActiveUserPanel({ active }: { active: ApiUser | null }) {
                 New chat
               </button>
             </div>
-            <p className="m-0 text-muted text-xs">
+            <p className="m-0 shrink-0 text-muted text-xs">
               Sorted by latest message. Think mode uses the selected chat.
             </p>
             {sessionsQuery.isLoading ? (
@@ -174,6 +160,21 @@ export function ActiveUserPanel({ active }: { active: ApiUser | null }) {
                 })}
               </ul>
             )}
+          </div>
+
+          <div className="flex shrink-0 flex-col gap-1.5 border-line border-t pt-3">
+            <Link
+              href={`/settings/${encodeURIComponent(live.id)}`}
+              className="rounded border border-line bg-transparent px-2 py-1.5 text-center text-muted text-xs no-underline hover:border-ink hover:text-ink"
+            >
+              Settings
+            </Link>
+            <Link
+              href="/auth"
+              className="rounded border border-line bg-transparent px-2 py-1.5 text-center text-muted text-xs no-underline hover:border-ink hover:text-ink"
+            >
+              Switch Account
+            </Link>
           </div>
         </>
       )}
