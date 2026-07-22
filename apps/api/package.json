@@ -5,14 +5,22 @@
   "scripts": {
     "dev": "bun --env-file=../../.env run src/index.ts",
     "setup:gbrain": "bun --env-file=../../.env run scripts/setup-gbrain.ts",
+    "seed": "bun --env-file=../../.env run scripts/seed.ts",
+    "prisma": "bun --env-file=../../.env ./node_modules/prisma/build/index.js",
+    "prisma:generate": "bun --env-file=../../.env ./node_modules/prisma/build/index.js generate",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.9.0",
+    "@prisma/client": "^7.9.0",
+    "pg": "^8.22.0",
     "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@gbrain-sandbox/typescript-config": "workspace:*",
     "@types/bun": "latest",
+    "@types/pg": "^8.20.0",
+    "prisma": "^7.9.0",
     "typescript": "^5.9.2"
   }
 }

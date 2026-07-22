@@ -12,6 +12,7 @@ import {
   createUser,
   deleteUser,
   listUsers,
+  type NukeTarget,
   nukeDatabase,
   regenerateUserKey,
   UserQueryKey,
@@ -115,13 +116,15 @@ export function AuthPanel() {
   });
 
   const nukeMutation = useMutation({
-    mutationFn: () => nukeDatabase(),
-    onSuccess: async () => {
+    mutationFn: (target: NukeTarget) => nukeDatabase(target),
+    onSuccess: async (data) => {
       setNukeConfirmOpen(false);
-      setActiveUserId(null);
-      setSelectedId(null);
-      queryClient.clear();
-      await queryClient.invalidateQueries({ queryKey: UserQueryKey.List });
+      if (data.target === "app" || data.target === "both") {
+        setActiveUserId(null);
+        setSelectedId(null);
+        queryClient.clear();
+        await queryClient.invalidateQueries({ queryKey: UserQueryKey.List });
+      }
     },
   });
 
@@ -304,8 +307,8 @@ export function AuthPanel() {
 
         <div className="mt-6 border-line border-t pt-4">
           <p className="mt-0 mb-2 text-muted text-xs">
-            Drops all app tables and recreates an empty schema. Cannot be
-            undone.
+            Hard-wipe app and/or gbrain databases (public schema including
+            extensions). Recreate with Prisma / gbrain CLI / seed afterward.
           </p>
           <button
             type="button"
@@ -329,40 +332,66 @@ export function AuthPanel() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="nuke-dialog-title"
-            className="w-full max-w-sm rounded-md border border-line bg-surface p-5 shadow-lg"
+            className="relative w-full max-w-md rounded-md border border-line bg-surface p-5 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded border border-transparent text-lg text-muted leading-none hover:border-line hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Close"
+              disabled={nukeMutation.isPending}
+              onClick={() => setNukeConfirmOpen(false)}
+            >
+              ×
+            </button>
             <h2
               id="nuke-dialog-title"
-              className="m-0 font-display text-ink text-lg"
+              className="m-0 pr-8 font-display text-ink text-lg"
             >
-              Nuke Database?
+              Nuke Database
             </h2>
             <p className="mt-2 mb-0 text-muted text-sm">
-              This drops all app tables (users, sessions, messages, memories,
-              gbrain auth) and recreates an empty schema. This cannot be undone.
+              Drops the entire <code className="font-mono text-xs">public</code>{" "}
+              schema (tables and extensions). Cannot be undone. Afterward run
+              Prisma migrate,{" "}
+              <code className="font-mono text-xs">setup:gbrain</code>, and{" "}
+              <code className="font-mono text-xs">seed</code> as needed.
             </p>
             {nukeMutation.isError ? (
               <p className="mt-3 mb-0 text-danger text-sm">
                 {errorMessage(nukeMutation.error)}
               </p>
             ) : null}
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
-                className="rounded border border-line bg-transparent px-3.5 py-1.5 text-ink text-sm hover:border-ink disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded border border-danger bg-transparent px-3.5 py-2 text-danger text-sm hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={nukeMutation.isPending}
-                onClick={() => setNukeConfirmOpen(false)}
+                onClick={() => nukeMutation.mutate("app")}
               >
-                Cancel
+                {nukeMutation.isPending && nukeMutation.variables === "app"
+                  ? "Nuking…"
+                  : "Nuke App DB"}
               </button>
               <button
                 type="button"
-                className="rounded border border-danger bg-danger px-3.5 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded border border-danger bg-transparent px-3.5 py-2 text-danger text-sm hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={nukeMutation.isPending}
-                onClick={() => nukeMutation.mutate()}
+                onClick={() => nukeMutation.mutate("gbrain")}
               >
-                {nukeMutation.isPending ? "Nuking…" : "Nuke Database"}
+                {nukeMutation.isPending && nukeMutation.variables === "gbrain"
+                  ? "Nuking…"
+                  : "Nuke Gbrain DB"}
+              </button>
+              <button
+                type="button"
+                className="w-full rounded border border-danger bg-danger px-3.5 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={nukeMutation.isPending}
+                onClick={() => nukeMutation.mutate("both")}
+              >
+                {nukeMutation.isPending && nukeMutation.variables === "both"
+                  ? "Nuking…"
+                  : "Nuke Gbrain and App DB"}
               </button>
             </div>
           </div>

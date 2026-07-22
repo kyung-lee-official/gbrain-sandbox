@@ -1,5 +1,10 @@
 import postgres from "postgres";
-import { apiKeyForSeedUser, appDatabaseUrl, SEED_USER_IDS } from "./config.ts";
+import {
+  apiKeyForSeedUser,
+  requireAppDatabaseUrl,
+  requireGbrainDatabaseUrl,
+  SEED_USER_IDS,
+} from "./config.ts";
 
 export type AppUser = {
   id: string;
@@ -39,10 +44,7 @@ let sql: ReturnType<typeof postgres> | null = null;
 
 export function db(): ReturnType<typeof postgres> {
   if (!sql) {
-    const url = appDatabaseUrl();
-    if (!url)
-      throw new Error("Missing APP_DATABASE_URL or GBRAIN_DATABASE_URL");
-    sql = postgres(url, { max: 10 });
+    sql = postgres(requireAppDatabaseUrl(), { max: 10 });
   }
   return sql;
 }
@@ -54,73 +56,44 @@ export async function closeDb(): Promise<void> {
   }
 }
 
-/** Drop every app_* table, then recreate empty schema (no seed). */
-export async function nukeDatabase(): Promise<void> {
-  const s = db();
-  await s`
-    DROP TABLE IF EXISTS
-      app_messages,
-      app_sessions,
-      app_memories,
-      app_gbrain_auth,
-      app_users
-    CASCADE
-  `;
-  await migrate();
+export type NukeTarget = "app" | "gbrain" | "both";
+
+/** Hard-wipe `public` (tables, types, extensions). No remigrate. */
+async function wipePublicSchema(connectionString: string): Promise<void> {
+  const s = postgres(connectionString, { max: 1 });
+  try {
+    // Drop non-core extensions first (e.g. vector), then the whole public schema.
+    await s.unsafe(`
+      DO $wipe$
+      DECLARE
+        ext record;
+      BEGIN
+        FOR ext IN
+          SELECT extname FROM pg_extension WHERE extname <> 'plpgsql'
+        LOOP
+          EXECUTE format('DROP EXTENSION IF EXISTS %I CASCADE', ext.extname);
+        END LOOP;
+      END
+      $wipe$;
+    `);
+    await s.unsafe("DROP SCHEMA IF EXISTS public CASCADE");
+    await s.unsafe("CREATE SCHEMA public");
+    await s.unsafe("GRANT ALL ON SCHEMA public TO CURRENT_USER");
+    await s.unsafe("GRANT ALL ON SCHEMA public TO public");
+  } finally {
+    await s.end({ timeout: 5 });
+  }
 }
 
-export async function migrate(): Promise<void> {
-  const s = db();
-  await s`
-    CREATE TABLE IF NOT EXISTS app_users (
-      id TEXT PRIMARY KEY,
-      api_key TEXT NOT NULL UNIQUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await s`
-    CREATE TABLE IF NOT EXISTS app_gbrain_auth (
-      id TEXT PRIMARY KEY DEFAULT 'default',
-      oauth_client_id TEXT NOT NULL,
-      oauth_client_secret TEXT NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  await s`
-    CREATE TABLE IF NOT EXISTS app_memories (
-      id BIGSERIAL PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-      slug TEXT NOT NULL,
-      content TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (user_id, slug)
-    )
-  `;
-  await s`CREATE INDEX IF NOT EXISTS app_memories_user_id_idx ON app_memories (user_id, created_at DESC)`;
-  await s`
-    CREATE INDEX IF NOT EXISTS app_memories_fts_idx
-    ON app_memories
-    USING gin (to_tsvector('english', content))
-  `;
-  await s`
-    CREATE TABLE IF NOT EXISTS app_sessions (
-      id UUID PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  await s`
-    CREATE TABLE IF NOT EXISTS app_messages (
-      id BIGSERIAL PRIMARY KEY,
-      session_id UUID NOT NULL REFERENCES app_sessions(id) ON DELETE CASCADE,
-      role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-      content TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  await s`CREATE INDEX IF NOT EXISTS app_messages_session_id_idx ON app_messages (session_id, created_at)`;
+/** Wipe app and/or gbrain databases. Caller recreates schema via Prisma / gbrain CLI. */
+export async function nukeDatabases(target: NukeTarget): Promise<void> {
+  if (target === "app" || target === "both") {
+    await closeDb();
+    await wipePublicSchema(requireAppDatabaseUrl());
+  }
+  if (target === "gbrain" || target === "both") {
+    await wipePublicSchema(requireGbrainDatabaseUrl());
+  }
 }
 
 function mapUserRow(row: Record<string, unknown>): AppUser {
@@ -487,10 +460,4 @@ export async function seedAppUsers(): Promise<AppUser[]> {
   }
   await deleteUser("bob");
   return seeded;
-}
-
-/** On API boot: seed only when the table is empty. */
-export async function seedDemoUsersIfEmpty(): Promise<void> {
-  if ((await countUsers()) > 0) return;
-  await seedAppUsers();
 }

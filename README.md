@@ -121,9 +121,10 @@ Install Postgres locally (or use an existing instance). Create a database (e.g. 
 
 ```env
 GBRAIN_DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/gbrain
+APP_DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/gbrain_app
 ```
 
-Optional: set `APP_DATABASE_URL` if Bun app tables should live elsewhere; otherwise they use `GBRAIN_DATABASE_URL`. gbrain needs the **`vector`** extension in that database (`CREATE EXTENSION vector;` after pgvector is installed).
+Create **two** databases. They are strictly separate (no fallback). gbrain needs the **`vector`** extension on the **gbrain** database only (`CREATE EXTENSION vector;` after pgvector is installed). App schema is managed by Prisma against `APP_DATABASE_URL`.
 
 ### Build Tools for Visual Studio (Windows, for pgvector)
 
@@ -170,24 +171,33 @@ bun install
 
 Uses Bun workspaces + Turborepo. From the repo root:
 
-| Script                 | What it runs                                |
-| ---------------------- | ------------------------------------------- |
-| `bun run dev:api`      | Bun API (`apps/api`) on `:3132`             |
-| `bun run dev:web`      | Next.js UI (`apps/web`) on `:3133`          |
-| `bun run setup:gbrain` | Register shared-source + OAuth + demo users |
-| `bun run check-types`  | Typecheck workspace packages                |
+| Script                 | What it runs                                              |
+| ---------------------- | --------------------------------------------------------- |
+| `bun run dev:api`      | Bun API (`apps/api`) on `:3132`                           |
+| `bun run dev:web`      | Next.js UI (`apps/web`) on `:3133`                        |
+| `bun run setup:gbrain` | Register shared-source + OAuth → `app_gbrain_auth`        |
+| `bun run seed`         | Upsert demo users into `app_users`                        |
+| `bun run check-types`  | Typecheck workspace packages                              |
 
 ### 2. Environment
 
-Copy `.env.example` to `.env` and fill in values (keep `.env` at the **repo root**).
+Copy `.env.example` to `.env` and fill in values (keep `.env` at the **repo root**). Set both `GBRAIN_DATABASE_URL` and `APP_DATABASE_URL`.
 
-### 3. Shared source + OAuth (one-time)
+### 3. App schema + shared source + seed
+
+From a greenfield (or after nuke), typical order:
 
 ```bash
-bun run setup:gbrain
+# apps/api — create/apply Prisma migrations for APP_DATABASE_URL
+cd apps/api
+bun run prisma -- migrate dev --name init
+cd ../..
+
+bun run setup:gbrain   # gbrain source/sync/OAuth (app_gbrain_auth must exist)
+bun run seed           # lily, haewon, …
 ```
 
-Registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, `read` on shared), stores it in `app_gbrain_auth`, and **upserts six seed users** into `app_users` (Lily, Haewon, Sullyoon, Bae, Jiwoo, Kyujin) while removing legacy `bob`. Re-runs skip existing OAuth unless you pass `-- --force-oauth`; users are always re-upserted.
+`setup:gbrain` registers `shared-source`, syncs it, creates **one** OAuth client (`sandbox-shared`, `read` on shared), and stores credentials in `app_gbrain_auth`. It does **not** migrate app tables or seed users. Re-runs skip existing OAuth unless you pass `-- --force-oauth`.
 
 #### How Bun authenticates to gbrain (MCP)
 
@@ -272,7 +282,7 @@ Opens at `http://localhost:3133`. The browser calls the Bun API (`NEXT_PUBLIC_AP
 | `POST /query`       | Bearer                    | `{ "message": "...", "mode": "think" }` |
 | `POST /remember`    | Bearer                    | `{ "content": "..." }`                  |
 
-Seed users (after `bun run setup:gbrain`): `lily`, `haewon`, `sullyoon`, `bae`, `jiwoo`, `kyujin` with keys `demo-key-<id>`. `mode` is `think` (default), `query`, or `search`. Full contract: [`docs/API.md`](docs/API.md).
+Seed users (after `bun run seed`): `lily`, `haewon`, `sullyoon`, `bae`, `jiwoo`, `kyujin` with keys `demo-key-<id>`. `mode` is `think` (default), `query`, or `search`. Full contract: [`docs/API.md`](docs/API.md).
 
 ## Maintainer workflow (shared only)
 
@@ -332,8 +342,8 @@ Note: gbrain MCP `think` truncates gathered pages to ~600 characters ([#2369](ht
 
 | Variable                          | Purpose                                                                  |
 | --------------------------------- | ------------------------------------------------------------------------ |
-| `GBRAIN_DATABASE_URL`             | gbrain + default app DB                                                  |
-| `APP_DATABASE_URL`                | Bun tables (optional; falls back to `GBRAIN_DATABASE_URL`)               |
+| `GBRAIN_DATABASE_URL`             | gbrain knowledge DB (required)                                           |
+| `APP_DATABASE_URL`                | Bun/Prisma app DB (required; e.g. `…/gbrain_app`)                        |
 | `DEEPSEEK_API_KEY`                | Bun think-mode synthesis (required for `mode=think`)                     |
 | `GBRAIN_CHAT_MODEL`               | Default synthesis model id (e.g. `deepseek:deepseek-v4-flash`)           |
 | `SYNTHESIS_MODEL`                 | Optional override; DeepSeek model id without `deepseek:` prefix          |

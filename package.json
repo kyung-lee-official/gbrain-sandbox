@@ -12,6 +12,7 @@
     "dev:api": "turbo run dev --filter=@gbrain-sandbox/api",
     "dev:web": "turbo run dev --filter=@gbrain-sandbox/web",
     "setup:gbrain": "bun --env-file=.env run --filter @gbrain-sandbox/api setup:gbrain",
+    "seed": "bun --env-file=.env run --filter @gbrain-sandbox/api seed",
     "check-types": "turbo run check-types"
   },
   "workspaces": [

@@ -8,6 +8,9 @@
     "setup:gbrain": {
       "cache": false
     },
+    "seed": {
+      "cache": false
+    },
     "check-types": {
       "dependsOn": ["^check-types"]
     }

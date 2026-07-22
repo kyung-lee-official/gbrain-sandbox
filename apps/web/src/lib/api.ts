@@ -95,10 +95,18 @@ export async function getHealth(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>("/health");
 }
 
-export async function nukeDatabase(): Promise<{ ok: boolean; nuked: boolean }> {
-  return apiFetch<{ ok: boolean; nuked: boolean }>("/admin/nuke", {
-    method: "POST",
-  });
+export type NukeTarget = "app" | "gbrain" | "both";
+
+export async function nukeDatabase(
+  target: NukeTarget,
+): Promise<{ ok: boolean; nuked: boolean; target: NukeTarget }> {
+  return apiFetch<{ ok: boolean; nuked: boolean; target: NukeTarget }>(
+    "/admin/nuke",
+    {
+      method: "POST",
+      body: JSON.stringify({ target }),
+    },
+  );
 }
 
 export async function listUsers(): Promise<ApiUser[]> {

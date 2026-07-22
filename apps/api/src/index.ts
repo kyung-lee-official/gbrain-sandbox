@@ -19,13 +19,13 @@ import {
   listRecentMessages,
   listSessionsForUser,
   listUsers,
-  migrate,
-  nukeDatabase,
+  type NukeTarget,
+  nukeDatabases,
   searchMemoriesByUser,
-  seedDemoUsersIfEmpty,
   updateUserApiKey,
 } from "./db.ts";
 import { gbrainQueryHits, gbrainSearch } from "./gbrain-client.ts";
+import { closePrisma } from "./prisma.ts";
 import { logRetrievalHits, parseRetrievalHits } from "./retrieval.ts";
 
 export type AskMode = "think" | "query" | "search";
@@ -227,9 +227,30 @@ async function handleListUsers(): Promise<Response> {
   return json({ users: users.map(userJson) });
 }
 
-async function handleNukeDatabase(): Promise<Response> {
-  await nukeDatabase();
-  return json({ ok: true, nuked: true });
+async function handleNukeDatabase(req: Request): Promise<Response> {
+  let body: { target?: string };
+  try {
+    body = (await req.json()) as { target?: string };
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const target = body.target;
+  if (target !== "app" && target !== "gbrain" && target !== "both") {
+    return json({ error: "target must be 'app', 'gbrain', or 'both'" }, 400);
+  }
+
+  try {
+    await nukeDatabases(target as NukeTarget);
+    if (target === "app" || target === "both") {
+      await closePrisma();
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return json({ error: msg }, 500);
+  }
+
+  return json({ ok: true, nuked: true, target });
 }
 
 async function handleGetUser(idParam: string): Promise<Response> {
@@ -415,7 +436,7 @@ const server = Bun.serve({
 
     if (req.method === "GET" && path === "/health") return handleHealth();
     if (req.method === "POST" && path === "/admin/nuke")
-      return handleNukeDatabase();
+      return handleNukeDatabase(req);
     if (req.method === "POST" && path === "/query") return handleQuery(req);
     if (req.method === "POST" && path === "/remember")
       return handleRemember(req);
@@ -455,13 +476,12 @@ const server = Bun.serve({
   },
 });
 
-await migrate();
-await seedDemoUsersIfEmpty();
-
 console.log(`gbrain-sandbox API listening on http://localhost:${server.port}`);
 console.log(
   "User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id, GET /users/:id/data, DELETE /users/:id/memories/:memoryId",
 );
 console.log("Sessions: GET/POST /sessions; think mode accepts body.sessionId");
-console.log("Admin: POST /admin/nuke — drop all app_* tables and remigrate");
+console.log(
+  "Admin: POST /admin/nuke { target: app|gbrain|both } — wipe public schema(s)",
+);
 export default server;

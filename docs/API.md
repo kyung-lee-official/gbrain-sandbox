@@ -9,7 +9,7 @@ All responses are JSON (`Content-Type: application/json`).
 | Endpoint                                | Auth                                                |
 | --------------------------------------- | --------------------------------------------------- |
 | `GET /health`                           | none                                                |
-| `POST /admin/nuke`                      | none (sandbox; drops all app tables)                |
+| `POST /admin/nuke`                      | none (sandbox; wipe `public` on app and/or gbrain DB)   |
 | `GET /users`, `GET /users/:id`          | none (sandbox convenience)                          |
 | `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                   |
 | `DELETE /users/:id/memories/:memoryId`  | `Authorization: Bearer <api-key>`                   |
@@ -18,7 +18,7 @@ All responses are JSON (`Content-Type: application/json`).
 | `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                   |
 | `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                   |
 
-Seed users (after `bun run setup:gbrain`; stored in `app_users`):
+Seed users (after `bun run seed`; stored in `app_users`):
 
 | User id    | Default API key     |
 | ---------- | ------------------- |
@@ -49,13 +49,27 @@ Liveness check. No auth.
 
 ### `POST /admin/nuke`
 
-Sandbox only: drop all `app_*` tables (`app_messages`, `app_sessions`, `app_memories`, `app_gbrain_auth`, `app_users`) and recreate empty schema. No auth. Does not re-seed users (restarting the API will seed when the table is empty).
+Sandbox only: hard-wipe `public` schema(s) including extensions. No auth. Does **not** remigrate or seed — recreate with Prisma / gbrain CLI / `bun run seed`.
+
+**Request**
+
+```json
+{ "target": "app" }
+```
+
+| `target`  | Effect                                      |
+| --------- | ------------------------------------------- |
+| `app`     | Wipe `APP_DATABASE_URL`                     |
+| `gbrain`  | Wipe `GBRAIN_DATABASE_URL`                  |
+| `both`    | Wipe both                                   |
 
 **200**
 
 ```json
-{ "ok": true, "nuked": true }
+{ "ok": true, "nuked": true, "target": "app" }
 ```
+
+**400** — missing/invalid `target`.
 
 ### `GET /users`
 
