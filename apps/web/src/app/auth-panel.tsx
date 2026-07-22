@@ -15,6 +15,7 @@ import {
   regenerateUserKey,
   UserQueryKey,
 } from "@/lib/api";
+import { displayName } from "@/lib/display-name";
 
 const createUserSchema = z.object({
   id: z
@@ -28,10 +29,6 @@ const createUserSchema = z.object({
 });
 
 type CreateUserValues = z.infer<typeof createUserSchema>;
-
-function displayName(id: string): string {
-  return id.charAt(0).toUpperCase() + id.slice(1);
-}
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;

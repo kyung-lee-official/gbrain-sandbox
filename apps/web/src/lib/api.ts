@@ -88,6 +88,7 @@ export const UserQueryKey = {
   DataRoot: (id: string) => ["users", id, "data"] as const,
   Data: (id: string, messagePage: number) =>
     ["users", id, "data", messagePage] as const,
+  Sessions: (userId: string) => ["sessions", userId] as const,
 } as const;
 
 export async function getHealth(): Promise<{ ok: boolean }> {
@@ -175,15 +176,34 @@ export async function deleteUserMemory(input: {
   );
 }
 
+export async function listSessions(apiKey: string): Promise<UserSessionRow[]> {
+  const data = await apiFetch<{ sessions: UserSessionRow[] }>("/sessions", {
+    apiKey,
+  });
+  return data.sessions ?? [];
+}
+
+export async function createSession(apiKey: string): Promise<UserSessionRow> {
+  return apiFetch<UserSessionRow>("/sessions", {
+    method: "POST",
+    apiKey,
+  });
+}
+
 export async function postQuery(input: {
   apiKey: string;
   message: string;
   mode: AskMode;
+  sessionId?: string | null;
 }): Promise<QueryResult> {
   return apiFetch<QueryResult>("/query", {
     method: "POST",
     apiKey: input.apiKey,
-    body: JSON.stringify({ message: input.message, mode: input.mode }),
+    body: JSON.stringify({
+      message: input.message,
+      mode: input.mode,
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+    }),
   });
 }
 

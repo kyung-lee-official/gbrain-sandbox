@@ -4,10 +4,12 @@ import { slugForMemoryNote } from "./context.ts";
 import {
   type AppUser,
   countUsers,
+  createSession,
   createUser,
   deleteMemoryForUser,
   deleteUser,
   getOrCreateSession,
+  getSessionOwnedByUser,
   getUserByApiKey,
   getUserById,
   insertMemory,
@@ -85,13 +87,29 @@ function newApiKey(userId: string): string {
   return `demo-key-${userId}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function sessionJson(session: {
+  id: string;
+  created_at: Date;
+  updated_at: Date;
+}) {
+  return {
+    id: session.id,
+    createdAt: isoFromDate(session.created_at),
+    updatedAt: isoFromDate(session.updated_at),
+  };
+}
+
 async function handleQuery(req: Request): Promise<Response> {
   const user = await resolveUser(req);
   if (!user) return unauthorized();
 
-  let body: { message?: string; mode?: string };
+  let body: { message?: string; mode?: string; sessionId?: string };
   try {
-    body = (await req.json()) as { message?: string; mode?: string };
+    body = (await req.json()) as {
+      message?: string;
+      mode?: string;
+      sessionId?: string;
+    };
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
   }
@@ -121,7 +139,15 @@ async function handleQuery(req: Request): Promise<Response> {
         break;
       }
       case "think": {
-        const sessionId = await getOrCreateSession(user.id);
+        const requested = body.sessionId?.trim();
+        let sessionId: string;
+        if (requested) {
+          const owned = await getSessionOwnedByUser(requested, user.id);
+          if (!owned) return json({ error: "Session not found" }, 404);
+          sessionId = owned.id;
+        } else {
+          sessionId = await getOrCreateSession(user.id);
+        }
         const recent = await listRecentMessages(sessionId);
         const personalMemories = await searchMemoriesByUser(user.id, message);
         answer = await answerWithHydratedPages(
@@ -153,6 +179,22 @@ async function handleQuery(req: Request): Promise<Response> {
     mode,
     answer,
   });
+}
+
+async function handleListSessions(req: Request): Promise<Response> {
+  const user = await resolveUser(req);
+  if (!user) return unauthorized();
+
+  const sessions = await listSessionsForUser(user.id);
+  return json({ sessions: sessions.map(sessionJson) });
+}
+
+async function handleCreateSession(req: Request): Promise<Response> {
+  const user = await resolveUser(req);
+  if (!user) return unauthorized();
+
+  const session = await createSession(user.id);
+  return json(sessionJson(session), 201);
 }
 
 async function handleRemember(req: Request): Promise<Response> {
@@ -370,6 +412,11 @@ const server = Bun.serve({
     if (req.method === "POST" && path === "/remember")
       return handleRemember(req);
 
+    if (req.method === "GET" && path === "/sessions")
+      return handleListSessions(req);
+    if (req.method === "POST" && path === "/sessions")
+      return handleCreateSession(req);
+
     if (req.method === "GET" && path === "/users") return handleListUsers();
     if (req.method === "POST" && path === "/users")
       return handleCreateUser(req);
@@ -407,4 +454,5 @@ console.log(`gbrain-sandbox API listening on http://localhost:${server.port}`);
 console.log(
   "User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id, GET /users/:id/data, DELETE /users/:id/memories/:memoryId",
 );
+console.log("Sessions: GET/POST /sessions; think mode accepts body.sessionId");
 export default server;

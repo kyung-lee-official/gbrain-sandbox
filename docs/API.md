@@ -12,6 +12,7 @@ All responses are JSON (`Content-Type: application/json`).
 | `GET /users`, `GET /users/:id`          | none (sandbox convenience)                          |
 | `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                   |
 | `DELETE /users/:id/memories/:memoryId`  | `Authorization: Bearer <api-key>`                   |
+| `GET /sessions`, `POST /sessions`       | `Authorization: Bearer <api-key>`                   |
 | `POST /users`                           | Bearer if any users exist; open when table is empty |
 | `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                   |
 | `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                   |
@@ -138,6 +139,30 @@ Requires Bearer. Deletes one `app_memories` row owned by `:id`.
 
 **200** `{ "deleted": true, "id": 1 }`, or **404**.
 
+### `GET /sessions`
+
+Requires Bearer. Lists the caller's chat sessions, newest activity first (`updated_at DESC`).
+
+**200**
+
+```json
+{
+  "sessions": [
+    {
+      "id": "uuid",
+      "createdAt": "2026-07-22T03:00:00.000Z",
+      "updatedAt": "2026-07-22T03:10:00.000Z"
+    }
+  ]
+}
+```
+
+### `POST /sessions`
+
+Requires Bearer. Creates a new empty chat session for the caller.
+
+**201** — one session object (same shape as list items).
+
 ### `POST /query`
 
 Ask against shared gbrain knowledge. Optional `mode` selects the tool path.
@@ -147,14 +172,16 @@ Ask against shared gbrain knowledge. Optional `mode` selects the tool path.
 ```json
 {
   "message": "What is the sandbox verification protocol codename?",
-  "mode": "think"
+  "mode": "think",
+  "sessionId": "optional-uuid-for-think"
 }
 ```
 
-| Field     | Required | Notes                                                                |
-| --------- | -------- | -------------------------------------------------------------------- |
-| `message` | yes      | Trimmed; empty → `400`                                               |
-| `mode`    | no       | `think` (default), `query` (hybrid retrieval), or `search` (keyword) |
+| Field       | Required | Notes                                                                |
+| ----------- | -------- | -------------------------------------------------------------------- |
+| `message`   | yes      | Trimmed; empty → `400`                                               |
+| `mode`      | no       | `think` (default), `query` (hybrid retrieval), or `search` (keyword) |
+| `sessionId` | no       | Think only; must belong to the caller. Omit → latest or new session  |
 
 | Mode     | gbrain tool                        | Behavior                                                                             |
 | -------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
@@ -186,7 +213,7 @@ Ask against shared gbrain knowledge. Optional `mode` selects the tool path.
 | Field       | Meaning                                                          |
 | ----------- | ---------------------------------------------------------------- |
 | `userId`    | Authenticated user                                               |
-| `sessionId` | Present for `think` only (one active thread per user)            |
+| `sessionId` | Present for `think` only (selected or latest chat session)       |
 | `mode`      | Echo of the selected mode                                        |
 | `answer`    | Synthesis text (`think`) or retrieval payload (`query`/`search`) |
 

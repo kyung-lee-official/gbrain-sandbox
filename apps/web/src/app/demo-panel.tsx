@@ -15,7 +15,6 @@ import {
   getHealth,
   listUsers,
   postQuery,
-  postRemember,
   UserQueryKey,
 } from "@/lib/api";
 import { ActiveUserPanel } from "./active-user-panel";
@@ -29,16 +28,11 @@ const MODE_HELP: Record<AskMode, string> = {
   search: "gbrain search — keyword / BM25 retrieval, no LLM",
 };
 
-const rememberSchema = z.object({
-  content: z.string().trim().min(1, "content is required"),
-});
-
 const askSchema = z.object({
   mode: z.enum(["think", "query", "search"]),
   message: z.string().trim().min(1, "message is required"),
 });
 
-type RememberValues = z.infer<typeof rememberSchema>;
 type AskValues = z.infer<typeof askSchema>;
 
 function errorMessage(err: unknown): string {
@@ -51,6 +45,7 @@ export function DemoPanel() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const activeUserId = useActiveUserStore((s) => s.activeUserId);
+  const activeSessionId = useActiveUserStore((s) => s.activeSessionId);
   const setActiveUserId = useActiveUserStore((s) => s.setActiveUserId);
   const [storeReady, setStoreReady] = useState(false);
   const [payload, setPayload] = useState<ApiPayload | null>(null);
@@ -93,34 +88,12 @@ export function DemoPanel() {
     }
   }, [storeReady, activeUserId, usersQuery.data, router, setActiveUserId]);
 
-  const rememberForm = useForm<RememberValues>({
-    resolver: zodResolver(rememberSchema),
-    defaultValues: { content: "" },
-  });
-
   const askForm = useForm<AskValues>({
     resolver: zodResolver(askSchema),
     defaultValues: { mode: "think", message: "" },
   });
 
   const mode = useWatch({ control: askForm.control, name: "mode" });
-
-  const rememberMutation = useMutation({
-    mutationFn: (values: RememberValues) => {
-      if (!active) throw new Error("Select a signed-in user.");
-      return postRemember({ apiKey: active.apiKey, content: values.content });
-    },
-    onSuccess: async (data) => {
-      setPayload(data);
-      rememberForm.reset({ content: "" });
-      if (active) {
-        await queryClient.invalidateQueries({
-          queryKey: UserQueryKey.DataRoot(active.id),
-        });
-      }
-    },
-    onError: (err) => setPayload({ error: errorMessage(err) }),
-  });
 
   const askMutation = useMutation({
     mutationFn: (values: AskValues) => {
@@ -129,6 +102,7 @@ export function DemoPanel() {
         apiKey: active.apiKey,
         message: values.message,
         mode: values.mode,
+        sessionId: values.mode === "think" ? activeSessionId : null,
       });
     },
     onSuccess: async (data) => {
@@ -138,12 +112,18 @@ export function DemoPanel() {
         await queryClient.invalidateQueries({
           queryKey: UserQueryKey.DataRoot(active.id),
         });
+        await queryClient.invalidateQueries({
+          queryKey: UserQueryKey.Sessions(active.id),
+        });
+        if (data.sessionId) {
+          useActiveUserStore.getState().setActiveSessionId(data.sessionId);
+        }
       }
     },
     onError: (err) => setPayload({ error: errorMessage(err) }),
   });
 
-  const pending = rememberMutation.isPending || askMutation.isPending;
+  const pending = askMutation.isPending;
   const healthOk = healthQuery.data?.ok === true;
   const healthError = healthQuery.isError
     ? errorMessage(healthQuery.error)
@@ -170,6 +150,16 @@ export function DemoPanel() {
               gbrain-sandbox
             </h1>
             <p className="my-1 text-muted text-sm">
+              Current session:{" "}
+              {activeSessionId ? (
+                <code className="break-all font-mono text-ink text-sm">
+                  {activeSessionId}
+                </code>
+              ) : (
+                <span>none — New chat or Ask (think)</span>
+              )}
+            </p>
+            <p className="my-1 text-muted text-sm">
               Conversation UI for Bun API at{" "}
               <code className="font-mono text-sm">{apiUrl}</code>
             </p>
@@ -178,8 +168,14 @@ export function DemoPanel() {
               <Link href="/auth" className="text-accent">
                 /auth
               </Link>
-              . Switch user keeps this session until you Sign in as someone
-              else.
+              . Personal notes live in{" "}
+              <Link
+                href={`/settings/${encodeURIComponent(active.id)}`}
+                className="text-accent"
+              >
+                Settings
+              </Link>
+              .
             </p>
             <p
               className={
@@ -199,38 +195,6 @@ export function DemoPanel() {
           </header>
 
           <div className="flex flex-col gap-4">
-            <form
-              className="flex flex-col gap-2.5 rounded-md border border-line bg-surface p-4"
-              onSubmit={rememberForm.handleSubmit((values) => {
-                setPayload(null);
-                rememberMutation.mutate(values);
-              })}
-            >
-              <h2 className="m-0 font-display text-ink text-lg">Remember</h2>
-              <p className="m-0 text-muted text-sm">
-                POST /remember — personal note in app Postgres
-              </p>
-              <textarea
-                className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
-                rows={3}
-                placeholder="My favorite coffee is oat latte."
-                disabled={pending}
-                {...rememberForm.register("content")}
-              />
-              {rememberForm.formState.errors.content ? (
-                <p className="m-0 text-danger text-sm">
-                  {rememberForm.formState.errors.content.message}
-                </p>
-              ) : null}
-              <button
-                type="submit"
-                className="self-start rounded border border-accent bg-accent px-3.5 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={pending || rememberForm.formState.isSubmitting}
-              >
-                Save note
-              </button>
-            </form>
-
             <form
               className="flex flex-col gap-2.5 rounded-md border border-line bg-surface p-4"
               onSubmit={askForm.handleSubmit((values) => {

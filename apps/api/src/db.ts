@@ -220,9 +220,47 @@ export async function getOrCreateSession(userId: string): Promise<string> {
   `;
   if (existing.length > 0) return existing[0]!.id as string;
 
+  const created = await createSession(userId);
+  return created.id;
+}
+
+/** Create a new empty chat session for a user. */
+export async function createSession(userId: string): Promise<AppSession> {
   const newId = crypto.randomUUID();
-  await s`INSERT INTO app_sessions (id, user_id) VALUES (${newId}::uuid, ${userId})`;
-  return newId;
+  const rows = await db()`
+    INSERT INTO app_sessions (id, user_id)
+    VALUES (${newId}::uuid, ${userId})
+    RETURNING id, user_id, created_at, updated_at
+  `;
+  const row = rows[0];
+  if (!row) throw new Error("createSession returned no row");
+  return {
+    id: row.id as string,
+    user_id: row.user_id as string,
+    created_at: row.created_at as Date,
+    updated_at: row.updated_at as Date,
+  };
+}
+
+/** Session owned by `userId`, or null. */
+export async function getSessionOwnedByUser(
+  sessionId: string,
+  userId: string,
+): Promise<AppSession | null> {
+  const rows = await db()`
+    SELECT id, user_id, created_at, updated_at
+    FROM app_sessions
+    WHERE id = ${sessionId}::uuid AND user_id = ${userId}
+    LIMIT 1
+  `;
+  if (rows.length === 0) return null;
+  const row = rows[0]!;
+  return {
+    id: row.id as string,
+    user_id: row.user_id as string,
+    created_at: row.created_at as Date,
+    updated_at: row.updated_at as Date,
+  };
 }
 
 export async function touchSession(sessionId: string): Promise<void> {

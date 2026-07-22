@@ -292,7 +292,7 @@ gbrain walks up from `./shared-source` to the monorepo `.git` and imports only t
 | `app_users`       | App users + API keys (seeded: lily, haewon, sullyoon, bae, jiwoo, kyujin) |
 | `app_gbrain_auth` | Long-lived gbrain OAuth **client** id/secret (app → MCP; not per-user)    |
 | `app_memories`    | Personal notes (`user_id` + `slug` + `content`)                           |
-| `app_sessions`    | One active thread per user                                                |
+| `app_sessions`    | Chat threads per user (think mode; selectable in the UI)                  |
 | `app_messages`    | Chat history                                                              |
 
 `app_gbrain_auth` columns: `id` (always `default`), `oauth_client_id`, `oauth_client_secret`, `updated_at`. gbrain does **not** read this table — it is Bun’s private copy of the client credentials issued at setup.
@@ -360,7 +360,6 @@ gbrain doctor
 
 - Real user login / signup API (JWT); demo uses hardcoded API keys
 - Vector embeddings for personal memory (Postgres FTS + recent fallback)
-- Multiple sessions per user
 - Rate limits / quotas on think-mode synthesis
 - TLS / production deployment
 - Using gbrain MCP `think` for answers (sandbox synthesizes in Bun instead)
