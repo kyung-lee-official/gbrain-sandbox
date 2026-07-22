@@ -171,13 +171,13 @@ bun install
 
 Uses Bun workspaces + Turborepo. From the repo root:
 
-| Script                 | What it runs                                              |
-| ---------------------- | --------------------------------------------------------- |
-| `bun run dev:api`      | Bun API (`apps/api`) on `:3132`                           |
-| `bun run dev:web`      | Next.js UI (`apps/web`) on `:3133`                        |
-| `bun run setup:gbrain` | Register shared-source + OAuth → `app_gbrain_auth`        |
-| `bun run seed`         | Upsert demo users into `app_users`                        |
-| `bun run check-types`  | Typecheck workspace packages                              |
+| Script                 | What it runs                                       |
+| ---------------------- | -------------------------------------------------- |
+| `bun run dev:api`      | Bun API (`apps/api`) on `:3132`                    |
+| `bun run dev:web`      | Next.js UI (`apps/web`) on `:3133`                 |
+| `bun run setup:gbrain` | Register shared-source + OAuth → `app_gbrain_auth` |
+| `bun run seed`         | Upsert demo users into `app_users`                 |
+| `bun run check-types`  | Typecheck workspace packages                       |
 
 ### 2. Environment
 
