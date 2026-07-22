@@ -7,7 +7,7 @@
   --color-surface: #ffffff;
   --color-line: #d8d2c4;
   --color-ok: #1b6b3a;
-  --color-danger: #9b1c1c;
+  --color-danger: #e11d1d;
   --color-accent: #0b5f9a;
   --font-display: Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, Consolas, monospace;
@@ -21,7 +21,7 @@
     --color-surface: #1c1c1c;
     --color-line: #333333;
     --color-ok: #6dca8f;
-    --color-danger: #f07178;
+    --color-danger: #ff4d4f;
     --color-accent: #2f8fd6;
   }
 }

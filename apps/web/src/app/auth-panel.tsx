@@ -44,6 +44,7 @@ export function AuthPanel() {
   const setActiveUserId = useActiveUserStore((s) => s.setActiveUserId);
   const [storeReady, setStoreReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [nukeConfirmOpen, setNukeConfirmOpen] = useState(false);
 
   useEffect(() => {
     setStoreReady(useActiveUserStore.persist.hasHydrated());
@@ -116,12 +117,24 @@ export function AuthPanel() {
   const nukeMutation = useMutation({
     mutationFn: () => nukeDatabase(),
     onSuccess: async () => {
+      setNukeConfirmOpen(false);
       setActiveUserId(null);
       setSelectedId(null);
       queryClient.clear();
       await queryClient.invalidateQueries({ queryKey: UserQueryKey.List });
     },
   });
+
+  useEffect(() => {
+    if (!nukeConfirmOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !nukeMutation.isPending) {
+        setNukeConfirmOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [nukeConfirmOpen, nukeMutation.isPending]);
 
   const busy =
     usersQuery.isFetching ||
@@ -298,21 +311,63 @@ export function AuthPanel() {
             type="button"
             className="w-full rounded border border-danger bg-transparent px-3.5 py-2 text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={busy}
-            onClick={() => {
-              if (
-                !window.confirm(
-                  "Nuke Database?\n\nThis drops all app tables (users, sessions, messages, memories, gbrain auth) and cannot be undone.",
-                )
-              ) {
-                return;
-              }
-              nukeMutation.mutate();
-            }}
+            onClick={() => setNukeConfirmOpen(true)}
           >
-            {nukeMutation.isPending ? "Nuking…" : "Nuke Database"}
+            Nuke Database
           </button>
         </div>
       </div>
+
+      {nukeConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5"
+          onClick={() => {
+            if (!nukeMutation.isPending) setNukeConfirmOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="nuke-dialog-title"
+            className="w-full max-w-sm rounded-md border border-line bg-surface p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="nuke-dialog-title"
+              className="m-0 font-display text-ink text-lg"
+            >
+              Nuke Database?
+            </h2>
+            <p className="mt-2 mb-0 text-muted text-sm">
+              This drops all app tables (users, sessions, messages, memories,
+              gbrain auth) and recreates an empty schema. This cannot be undone.
+            </p>
+            {nukeMutation.isError ? (
+              <p className="mt-3 mb-0 text-danger text-sm">
+                {errorMessage(nukeMutation.error)}
+              </p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded border border-line bg-transparent px-3.5 py-1.5 text-ink text-sm hover:border-ink disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={nukeMutation.isPending}
+                onClick={() => setNukeConfirmOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded border border-danger bg-danger px-3.5 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={nukeMutation.isPending}
+                onClick={() => nukeMutation.mutate()}
+              >
+                {nukeMutation.isPending ? "Nuking…" : "Nuke Database"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
