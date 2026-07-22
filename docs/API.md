@@ -9,6 +9,7 @@ All responses are JSON (`Content-Type: application/json`).
 | Endpoint                                | Auth                                                |
 | --------------------------------------- | --------------------------------------------------- |
 | `GET /health`                           | none                                                |
+| `POST /admin/nuke`                      | none (sandbox; drops all app tables)                |
 | `GET /users`, `GET /users/:id`          | none (sandbox convenience)                          |
 | `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                   |
 | `DELETE /users/:id/memories/:memoryId`  | `Authorization: Bearer <api-key>`                   |
@@ -44,6 +45,16 @@ Liveness check. No auth.
 
 ```json
 { "ok": true }
+```
+
+### `POST /admin/nuke`
+
+Sandbox only: drop all `app_*` tables (`app_messages`, `app_sessions`, `app_memories`, `app_gbrain_auth`, `app_users`) and recreate empty schema. No auth. Does not re-seed users (restarting the API will seed when the table is empty).
+
+**200**
+
+```json
+{ "ok": true, "nuked": true }
 ```
 
 ### `GET /users`

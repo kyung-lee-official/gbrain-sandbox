@@ -20,6 +20,7 @@ import {
   listSessionsForUser,
   listUsers,
   migrate,
+  nukeDatabase,
   searchMemoriesByUser,
   seedDemoUsersIfEmpty,
   updateUserApiKey,
@@ -226,6 +227,11 @@ async function handleListUsers(): Promise<Response> {
   return json({ users: users.map(userJson) });
 }
 
+async function handleNukeDatabase(): Promise<Response> {
+  await nukeDatabase();
+  return json({ ok: true, nuked: true });
+}
+
 async function handleGetUser(idParam: string): Promise<Response> {
   const id = normalizeUserId(idParam);
   if (!id) return json({ error: "Invalid user id" }, 400);
@@ -408,6 +414,8 @@ const server = Bun.serve({
     if (req.method === "OPTIONS") return corsPreflight();
 
     if (req.method === "GET" && path === "/health") return handleHealth();
+    if (req.method === "POST" && path === "/admin/nuke")
+      return handleNukeDatabase();
     if (req.method === "POST" && path === "/query") return handleQuery(req);
     if (req.method === "POST" && path === "/remember")
       return handleRemember(req);
@@ -455,4 +463,5 @@ console.log(
   "User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id, GET /users/:id/data, DELETE /users/:id/memories/:memoryId",
 );
 console.log("Sessions: GET/POST /sessions; think mode accepts body.sessionId");
+console.log("Admin: POST /admin/nuke — drop all app_* tables and remigrate");
 export default server;

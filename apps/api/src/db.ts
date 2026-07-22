@@ -54,6 +54,21 @@ export async function closeDb(): Promise<void> {
   }
 }
 
+/** Drop every app_* table, then recreate empty schema (no seed). */
+export async function nukeDatabase(): Promise<void> {
+  const s = db();
+  await s`
+    DROP TABLE IF EXISTS
+      app_messages,
+      app_sessions,
+      app_memories,
+      app_gbrain_auth,
+      app_users
+    CASCADE
+  `;
+  await migrate();
+}
+
 export async function migrate(): Promise<void> {
   const s = db();
   await s`

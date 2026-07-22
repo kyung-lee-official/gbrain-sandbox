@@ -95,6 +95,12 @@ export async function getHealth(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>("/health");
 }
 
+export async function nukeDatabase(): Promise<{ ok: boolean; nuked: boolean }> {
+  return apiFetch<{ ok: boolean; nuked: boolean }>("/admin/nuke", {
+    method: "POST",
+  });
+}
+
 export async function listUsers(): Promise<ApiUser[]> {
   const data = await apiFetch<{ users: ApiUser[] }>("/users");
   return data.users ?? [];

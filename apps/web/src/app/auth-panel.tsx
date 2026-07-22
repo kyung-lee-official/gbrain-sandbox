@@ -12,6 +12,7 @@ import {
   createUser,
   deleteUser,
   listUsers,
+  nukeDatabase,
   regenerateUserKey,
   UserQueryKey,
 } from "@/lib/api";
@@ -112,11 +113,22 @@ export function AuthPanel() {
     },
   });
 
+  const nukeMutation = useMutation({
+    mutationFn: () => nukeDatabase(),
+    onSuccess: async () => {
+      setActiveUserId(null);
+      setSelectedId(null);
+      queryClient.clear();
+      await queryClient.invalidateQueries({ queryKey: UserQueryKey.List });
+    },
+  });
+
   const busy =
     usersQuery.isFetching ||
     createMutation.isPending ||
     regenerateMutation.isPending ||
     deleteMutation.isPending ||
+    nukeMutation.isPending ||
     createForm.formState.isSubmitting;
 
   const actionError =
@@ -125,6 +137,7 @@ export function AuthPanel() {
       ? errorMessage(regenerateMutation.error)
       : null) ||
     (deleteMutation.isError ? errorMessage(deleteMutation.error) : null) ||
+    (nukeMutation.isError ? errorMessage(nukeMutation.error) : null) ||
     (usersQuery.isError ? errorMessage(usersQuery.error) : null);
 
   function signIn() {
@@ -275,6 +288,30 @@ export function AuthPanel() {
             Create user
           </button>
         </form>
+
+        <div className="mt-6 border-line border-t pt-4">
+          <p className="mt-0 mb-2 text-muted text-xs">
+            Drops all app tables and recreates an empty schema. Cannot be
+            undone.
+          </p>
+          <button
+            type="button"
+            className="w-full rounded border border-danger bg-transparent px-3.5 py-2 text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busy}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "Nuke Database?\n\nThis drops all app tables (users, sessions, messages, memories, gbrain auth) and cannot be undone.",
+                )
+              ) {
+                return;
+              }
+              nukeMutation.mutate();
+            }}
+          >
+            {nukeMutation.isPending ? "Nuking…" : "Nuke Database"}
+          </button>
+        </div>
       </div>
     </section>
   );
