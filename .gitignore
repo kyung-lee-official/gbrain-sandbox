@@ -22,6 +22,6 @@ Thumbs.db
 # Prisma Client (generated)
 apps/api/src/generated/
 
-# Nested gbrain knowledge repo — clone or git init into apps/gbrain (see docs/GBRAIN_SETUP.md)
-apps/gbrain/**
-!apps/gbrain/.gitkeep
+# Nested gbrain knowledge repo (own .git). Parent never tracks its contents.
+# Clone or `git init` into apps/gbrain — see docs/GBRAIN_SETUP.md.
+apps/gbrain/

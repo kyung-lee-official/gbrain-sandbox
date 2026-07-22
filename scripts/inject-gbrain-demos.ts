@@ -61,7 +61,7 @@ const nestedGitignore = join(targetRoot, ".gitignore");
 if (!(await Bun.file(nestedGitignore).exists())) {
   await Bun.write(
     nestedGitignore,
-    "# Local gbrain CLI env (never commit)\n.env\n.env.local\n\n# Monorepo placeholder\n.gitkeep\n",
+    "# Local gbrain CLI env (never commit)\n.env\n.env.local\n",
   );
   console.log("wrote apps/gbrain/.gitignore");
 }
