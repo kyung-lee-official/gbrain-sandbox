@@ -21,3 +21,11 @@ Thumbs.db
 
 # Prisma Client (generated)
 apps/api/src/generated/
+
+# shared-source: ignore sync/noise; keep demo pages + gitkeep
+shared-source/*
+!shared-source/.gitkeep
+!shared-source/duty-roster.md
+!shared-source/heptagon-watch.md
+!shared-source/north-quay-relay.md
+!shared-source/test-demo.md
