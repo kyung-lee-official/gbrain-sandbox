@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -15,9 +16,9 @@ import {
   postRemember,
   UserQueryKey,
 } from "@/lib/api";
+import { ActiveUserPanel } from "./active-user-panel";
 import { type ApiPayload, ResponseView } from "./response-view";
 import { UserDataPanel } from "./user-data-panel";
-import { UserSidebar } from "./user-sidebar";
 
 const MODE_HELP: Record<AskMode, string> = {
   think:
@@ -45,6 +46,7 @@ function errorMessage(err: unknown): string {
 }
 
 export function DemoPanel() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const activeUserId = useActiveUserStore((s) => s.activeUserId);
   const setActiveUserId = useActiveUserStore((s) => s.setActiveUserId);
@@ -66,6 +68,7 @@ export function DemoPanel() {
   const usersQuery = useQuery({
     queryKey: UserQueryKey.List,
     queryFn: listUsers,
+    enabled: storeReady,
   });
 
   const active = useMemo(() => {
@@ -76,12 +79,17 @@ export function DemoPanel() {
 
   useEffect(() => {
     if (!storeReady) return;
+    if (!activeUserId) {
+      router.replace("/auth");
+      return;
+    }
     const users = usersQuery.data;
-    if (!users || users.length === 0) return;
-    if (activeUserId && users.some((u) => u.id === activeUserId)) return;
-    const lily = users.find((u) => u.id === "lily");
-    setActiveUserId(lily?.id ?? users[0]?.id ?? null);
-  }, [storeReady, usersQuery.data, activeUserId, setActiveUserId]);
+    if (!users) return;
+    if (!users.some((u) => u.id === activeUserId)) {
+      setActiveUserId(null);
+      router.replace("/auth");
+    }
+  }, [storeReady, activeUserId, usersQuery.data, router, setActiveUserId]);
 
   const rememberForm = useForm<RememberValues>({
     resolver: zodResolver(rememberSchema),
@@ -139,6 +147,14 @@ export function DemoPanel() {
     ? errorMessage(healthQuery.error)
     : null;
 
+  if (!storeReady || !activeUserId || !active) {
+    return (
+      <p className="my-1 text-muted text-sm">
+        {!storeReady ? "Loading session…" : "Redirecting to sign in…"}
+      </p>
+    );
+  }
+
   return (
     <div>
       <p
@@ -158,20 +174,11 @@ export function DemoPanel() {
       </p>
 
       <div className="mt-6 grid grid-cols-1 items-start gap-5 md:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
-        <UserSidebar
-          activeUserId={active?.id ?? null}
-          onSelectUser={(user) => {
-            setActiveUserId(user?.id ?? null);
-            setPayload(null);
-          }}
-        />
+        <ActiveUserPanel active={active} />
 
         <div className="flex flex-col gap-4">
           <p className="m-0 text-muted text-sm">
-            Signed in as{" "}
-            <strong className="text-ink">
-              {active ? active.id : "nobody — pick a user in the sidebar"}
-            </strong>
+            Signed in as <strong className="text-ink">{active.id}</strong>
           </p>
 
           <form
@@ -189,7 +196,7 @@ export function DemoPanel() {
               className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
               rows={3}
               placeholder="My favorite coffee is oat latte."
-              disabled={pending || !active}
+              disabled={pending}
               {...rememberForm.register("content")}
             />
             {rememberForm.formState.errors.content ? (
@@ -200,9 +207,7 @@ export function DemoPanel() {
             <button
               type="submit"
               className="self-start rounded border border-accent bg-accent px-3.5 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={
-                pending || !active || rememberForm.formState.isSubmitting
-              }
+              disabled={pending || rememberForm.formState.isSubmitting}
             >
               Save note
             </button>
@@ -223,7 +228,7 @@ export function DemoPanel() {
               <span>Mode</span>
               <select
                 className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
-                disabled={pending || !active}
+                disabled={pending}
                 {...askForm.register("mode")}
               >
                 <option value="think">think</option>
@@ -235,7 +240,7 @@ export function DemoPanel() {
               className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
               rows={3}
               placeholder="What is the sandbox verification protocol codename?"
-              disabled={pending || !active}
+              disabled={pending}
               {...askForm.register("message")}
             />
             {askForm.formState.errors.message ? (
@@ -246,7 +251,7 @@ export function DemoPanel() {
             <button
               type="submit"
               className="self-start rounded border border-accent bg-accent px-3.5 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={pending || !active || askForm.formState.isSubmitting}
+              disabled={pending || askForm.formState.isSubmitting}
             >
               Ask
             </button>
@@ -254,7 +259,7 @@ export function DemoPanel() {
 
           <ResponseView pending={pending} payload={payload} />
 
-          <UserDataPanel key={active?.id ?? "none"} active={active} />
+          <UserDataPanel key={active.id} active={active} />
         </div>
       </div>
     </div>
