@@ -2,7 +2,6 @@ import postgres from "postgres";
 import {
   apiKeyForSeedUser,
   requireAppDatabaseUrl,
-  requireGbrainDatabaseUrl,
   SEED_USER_IDS,
 } from "./config.ts";
 
@@ -56,7 +55,7 @@ export async function closeDb(): Promise<void> {
   }
 }
 
-export type NukeTarget = "app" | "gbrain" | "both";
+export type NukeTarget = "app";
 
 /** Hard-wipe `public` (tables, types, extensions). No remigrate. */
 async function wipePublicSchema(connectionString: string): Promise<void> {
@@ -85,15 +84,13 @@ async function wipePublicSchema(connectionString: string): Promise<void> {
   }
 }
 
-/** Wipe app and/or gbrain databases. Caller recreates schema via Prisma / gbrain CLI. */
+/** Wipe the app database only. Recreate schema via Prisma; gbrain DB is wiped manually. */
 export async function nukeDatabases(target: NukeTarget): Promise<void> {
-  if (target === "app" || target === "both") {
-    await closeDb();
-    await wipePublicSchema(requireAppDatabaseUrl());
+  if (target !== "app") {
+    throw new Error("Only target 'app' is supported (wipe gbrain DB manually)");
   }
-  if (target === "gbrain" || target === "both") {
-    await wipePublicSchema(requireGbrainDatabaseUrl());
-  }
+  await closeDb();
+  await wipePublicSchema(requireAppDatabaseUrl());
 }
 
 function mapUserRow(row: Record<string, unknown>): AppUser {
@@ -191,6 +188,15 @@ export async function getGbrainAuth(): Promise<GbrainAuth | null> {
     oauth_client_id: row.oauth_client_id as string,
     oauth_client_secret: row.oauth_client_secret as string,
   };
+}
+
+export async function deleteGbrainAuth(): Promise<boolean> {
+  const rows = await db()`
+    DELETE FROM app_gbrain_auth
+    WHERE id = 'default'
+    RETURNING id
+  `;
+  return rows.length > 0;
 }
 
 export async function getUserByApiKey(apiKey: string): Promise<AppUser | null> {

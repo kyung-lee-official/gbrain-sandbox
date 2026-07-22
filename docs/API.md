@@ -6,17 +6,21 @@ All responses are JSON (`Content-Type: application/json`).
 
 ## Auth
 
-| Endpoint                                | Auth                                                |
-| --------------------------------------- | --------------------------------------------------- |
-| `GET /health`                           | none                                                |
-| `POST /admin/nuke`                      | none (sandbox; wipe `public` on app and/or gbrain DB)   |
-| `GET /users`, `GET /users/:id`          | none (sandbox convenience)                          |
-| `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                   |
-| `DELETE /users/:id/memories/:memoryId`  | `Authorization: Bearer <api-key>`                   |
-| `GET /sessions`, `POST /sessions`       | `Authorization: Bearer <api-key>`                   |
-| `POST /users`                           | Bearer if any users exist; open when table is empty |
-| `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                   |
-| `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                   |
+| Endpoint                                | Auth                                                 |
+| --------------------------------------- | ---------------------------------------------------- |
+| `GET /health`                           | none                                                 |
+| `POST /admin/nuke`                      | none (sandbox; wipe app DB `public` schema only)     |
+| `GET /admin/gbrain-auth`                | none (sandbox; read stored OAuth client credentials) |
+| `PUT /admin/gbrain-auth`                | none (sandbox; upsert + test via gbrain `/token`)    |
+| `DELETE /admin/gbrain-auth`             | none (sandbox; clear stored credentials)             |
+| `POST /admin/gbrain-auth/test`          | none (sandbox; token exchange smoke test)            |
+| `GET /users`, `GET /users/:id`          | none (sandbox convenience)                           |
+| `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                    |
+| `DELETE /users/:id/memories/:memoryId`  | `Authorization: Bearer <api-key>`                    |
+| `GET /sessions`, `POST /sessions`       | `Authorization: Bearer <api-key>`                    |
+| `POST /users`                           | Bearer if any users exist; open when table is empty  |
+| `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                    |
+| `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                    |
 
 Seed users (after `bun run seed`; stored in `app_users`):
 
@@ -49,7 +53,7 @@ Liveness check. No auth.
 
 ### `POST /admin/nuke`
 
-Sandbox only: hard-wipe `public` schema(s) including extensions. No auth. Does **not** remigrate or seed — recreate with Prisma / gbrain CLI / `bun run seed`.
+Sandbox only: hard-wipe `public` on **`APP_DATABASE_URL`** (including extensions). No auth. Does **not** touch the gbrain knowledge DB — wipe that manually (pgAdmin). Does **not** remigrate or seed.
 
 **Request**
 
@@ -57,19 +61,103 @@ Sandbox only: hard-wipe `public` schema(s) including extensions. No auth. Does *
 { "target": "app" }
 ```
 
-| `target`  | Effect                                      |
-| --------- | ------------------------------------------- |
-| `app`     | Wipe `APP_DATABASE_URL`                     |
-| `gbrain`  | Wipe `GBRAIN_DATABASE_URL`                  |
-| `both`    | Wipe both                                   |
-
 **200**
 
 ```json
 { "ok": true, "nuked": true, "target": "app" }
 ```
 
-**400** — missing/invalid `target`.
+**400** — missing/invalid `target` (only `"app"` is accepted).
+
+### `GET /admin/gbrain-auth`
+
+Read the sandbox OAuth client row (`app_gbrain_auth`, id `default`). No auth. Credentials are returned in plaintext (demo).
+
+**200** (not configured)
+
+```json
+{ "configured": false }
+```
+
+**200** (configured)
+
+```json
+{
+  "configured": true,
+  "oauthClientId": "…",
+  "oauthClientSecret": "…"
+}
+```
+
+### `PUT /admin/gbrain-auth`
+
+Upsert credentials, clear Bun’s in-memory OAuth token cache, then smoke-test with gbrain `POST /token` (`grant_type=client_credentials`, `scope=read`). Credentials are saved even if the token test fails.
+
+**Request**
+
+```json
+{
+  "oauthClientId": "…",
+  "oauthClientSecret": "…"
+}
+```
+
+**200**
+
+```json
+{
+  "configured": true,
+  "oauthClientId": "…",
+  "oauthClientSecret": "…",
+  "saved": true,
+  "connection": { "ok": true }
+}
+```
+
+or `"connection": { "ok": false, "error": "…" }` when gbrain rejects the credentials / is down.
+
+**400** — missing `oauthClientId` or `oauthClientSecret`.
+
+### `DELETE /admin/gbrain-auth`
+
+Delete the `default` row and clear the token cache.
+
+**200**
+
+```json
+{ "ok": true, "deleted": true, "configured": false }
+```
+
+### `POST /admin/gbrain-auth/test`
+
+Token exchange only (does not persist). Body credentials optional — if omitted, uses the stored row.
+
+**Request** (optional)
+
+```json
+{
+  "oauthClientId": "…",
+  "oauthClientSecret": "…"
+}
+```
+
+**200**
+
+```json
+{ "ok": true, "connection": { "ok": true } }
+```
+
+or
+
+```json
+{
+  "ok": false,
+  "error": "…",
+  "connection": { "ok": false, "error": "…" }
+}
+```
+
+**400** — no stored credentials and body incomplete.
 
 ### `GET /users`
 
@@ -122,9 +210,9 @@ Requires Bearer. Returns app Postgres rows for that user (`app_memories`, `app_s
 
 Query:
 
-| Param          | Default | Notes                                      |
-| -------------- | ------- | ------------------------------------------ |
-| `messagePage`  | `1`     | 1-based page of messages (50 per page)     |
+| Param         | Default | Notes                                  |
+| ------------- | ------- | -------------------------------------- |
+| `messagePage` | `1`     | 1-based page of messages (50 per page) |
 
 Messages are ordered **newest first** (`created_at DESC`).
 
@@ -136,9 +224,7 @@ Messages are ordered **newest first** (`created_at DESC`).
   "memories": [
     { "id": 1, "slug": "memory/…", "content": "…", "createdAt": "…" }
   ],
-  "sessions": [
-    { "id": "uuid", "createdAt": "…", "updatedAt": "…" }
-  ],
+  "sessions": [{ "id": "uuid", "createdAt": "…", "updatedAt": "…" }],
   "messages": {
     "items": [
       {

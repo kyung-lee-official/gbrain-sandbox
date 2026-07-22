@@ -6,8 +6,10 @@ import {
   countUsers,
   createSession,
   createUser,
+  deleteGbrainAuth,
   deleteMemoryForUser,
   deleteUser,
+  getGbrainAuth,
   getOrCreateSession,
   getSessionOwnedByUser,
   getUserByApiKey,
@@ -19,12 +21,17 @@ import {
   listRecentMessages,
   listSessionsForUser,
   listUsers,
-  type NukeTarget,
   nukeDatabases,
   searchMemoriesByUser,
   updateUserApiKey,
+  upsertGbrainAuth,
 } from "./db.ts";
-import { gbrainQueryHits, gbrainSearch } from "./gbrain-client.ts";
+import {
+  clearGbrainTokenCache,
+  gbrainQueryHits,
+  gbrainSearch,
+  testGbrainOAuthCredentials,
+} from "./gbrain-client.ts";
 import { closePrisma } from "./prisma.ts";
 import { logRetrievalHits, parseRetrievalHits } from "./retrieval.ts";
 
@@ -33,7 +40,7 @@ export type AskMode = "think" | "query" | "search";
 /** Browser UI is on :3133; without these, fetch fails as "Failed to fetch". */
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
@@ -236,21 +243,146 @@ async function handleNukeDatabase(req: Request): Promise<Response> {
   }
 
   const target = body.target;
-  if (target !== "app" && target !== "gbrain" && target !== "both") {
-    return json({ error: "target must be 'app', 'gbrain', or 'both'" }, 400);
+  if (target !== "app") {
+    return json(
+      { error: "target must be 'app' (wipe gbrain DB manually)" },
+      400,
+    );
   }
 
   try {
-    await nukeDatabases(target as NukeTarget);
-    if (target === "app" || target === "both") {
-      await closePrisma();
-    }
+    await nukeDatabases(target);
+    clearGbrainTokenCache();
+    await closePrisma();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return json({ error: msg }, 500);
   }
 
   return json({ ok: true, nuked: true, target });
+}
+
+function gbrainAuthJson(auth: {
+  oauth_client_id: string;
+  oauth_client_secret: string;
+}) {
+  return {
+    configured: true as const,
+    oauthClientId: auth.oauth_client_id,
+    oauthClientSecret: auth.oauth_client_secret,
+  };
+}
+
+function parseGbrainAuthBody(body: {
+  oauthClientId?: string;
+  oauthClientSecret?: string;
+}): { oauth_client_id: string; oauth_client_secret: string } | Response {
+  const oauthClientId = body.oauthClientId?.trim() ?? "";
+  const oauthClientSecret = body.oauthClientSecret?.trim() ?? "";
+  if (!oauthClientId || !oauthClientSecret) {
+    return json(
+      { error: "oauthClientId and oauthClientSecret are required" },
+      400,
+    );
+  }
+  return {
+    oauth_client_id: oauthClientId,
+    oauth_client_secret: oauthClientSecret,
+  };
+}
+
+async function handleGetGbrainAuth(): Promise<Response> {
+  const auth = await getGbrainAuth();
+  if (!auth) {
+    return json({ configured: false });
+  }
+  return json(gbrainAuthJson(auth));
+}
+
+async function handlePutGbrainAuth(req: Request): Promise<Response> {
+  let body: { oauthClientId?: string; oauthClientSecret?: string };
+  try {
+    body = (await req.json()) as {
+      oauthClientId?: string;
+      oauthClientSecret?: string;
+    };
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const parsed = parseGbrainAuthBody(body);
+  if (parsed instanceof Response) return parsed;
+
+  try {
+    await upsertGbrainAuth(parsed);
+    clearGbrainTokenCache();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return json({ error: msg }, 500);
+  }
+
+  const connection = await testGbrainOAuthCredentials(parsed);
+  return json({
+    ...gbrainAuthJson(parsed),
+    saved: true,
+    connection,
+  });
+}
+
+async function handleDeleteGbrainAuth(): Promise<Response> {
+  try {
+    const deleted = await deleteGbrainAuth();
+    clearGbrainTokenCache();
+    return json({ ok: true, deleted, configured: false });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return json({ error: msg }, 500);
+  }
+}
+
+async function handleTestGbrainAuth(req: Request): Promise<Response> {
+  let body: { oauthClientId?: string; oauthClientSecret?: string } = {};
+  const text = await req.text();
+  if (text.trim()) {
+    try {
+      body = JSON.parse(text) as {
+        oauthClientId?: string;
+        oauthClientSecret?: string;
+      };
+    } catch {
+      return json({ error: "Invalid JSON body" }, 400);
+    }
+  }
+
+  let auth: { oauth_client_id: string; oauth_client_secret: string };
+  if (body.oauthClientId?.trim() || body.oauthClientSecret?.trim()) {
+    const parsed = parseGbrainAuthBody(body);
+    if (parsed instanceof Response) return parsed;
+    auth = parsed;
+  } else {
+    const stored = await getGbrainAuth();
+    if (!stored) {
+      return json(
+        {
+          ok: false,
+          error:
+            "No credentials stored. Enter client id/secret or save them first.",
+        },
+        400,
+      );
+    }
+    auth = stored;
+  }
+
+  const connection = await testGbrainOAuthCredentials(auth);
+  if (connection.ok) {
+    return json({ ok: true, connection });
+  }
+  return json({
+    ok: false,
+    error: connection.error,
+    connection,
+  });
 }
 
 async function handleGetUser(idParam: string): Promise<Response> {
@@ -437,6 +569,14 @@ const server = Bun.serve({
     if (req.method === "GET" && path === "/health") return handleHealth();
     if (req.method === "POST" && path === "/admin/nuke")
       return handleNukeDatabase(req);
+    if (req.method === "GET" && path === "/admin/gbrain-auth")
+      return handleGetGbrainAuth();
+    if (req.method === "PUT" && path === "/admin/gbrain-auth")
+      return handlePutGbrainAuth(req);
+    if (req.method === "DELETE" && path === "/admin/gbrain-auth")
+      return handleDeleteGbrainAuth();
+    if (req.method === "POST" && path === "/admin/gbrain-auth/test")
+      return handleTestGbrainAuth(req);
     if (req.method === "POST" && path === "/query") return handleQuery(req);
     if (req.method === "POST" && path === "/remember")
       return handleRemember(req);
@@ -482,6 +622,6 @@ console.log(
 );
 console.log("Sessions: GET/POST /sessions; think mode accepts body.sessionId");
 console.log(
-  "Admin: POST /admin/nuke { target: app|gbrain|both } — wipe public schema(s)",
+  "Admin: POST /admin/nuke { target: app }; GET/PUT/DELETE /admin/gbrain-auth; POST /admin/gbrain-auth/test",
 );
 export default server;

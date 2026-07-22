@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -12,7 +13,6 @@ import {
   createUser,
   deleteUser,
   listUsers,
-  type NukeTarget,
   nukeDatabase,
   regenerateUserKey,
   UserQueryKey,
@@ -116,15 +116,13 @@ export function AuthPanel() {
   });
 
   const nukeMutation = useMutation({
-    mutationFn: (target: NukeTarget) => nukeDatabase(target),
-    onSuccess: async (data) => {
+    mutationFn: () => nukeDatabase("app"),
+    onSuccess: async () => {
       setNukeConfirmOpen(false);
-      if (data.target === "app" || data.target === "both") {
-        setActiveUserId(null);
-        setSelectedId(null);
-        queryClient.clear();
-        await queryClient.invalidateQueries({ queryKey: UserQueryKey.List });
-      }
+      setActiveUserId(null);
+      setSelectedId(null);
+      queryClient.clear();
+      await queryClient.invalidateQueries({ queryKey: UserQueryKey.List });
     },
   });
 
@@ -307,8 +305,17 @@ export function AuthPanel() {
 
         <div className="mt-6 border-line border-t pt-4">
           <p className="mt-0 mb-2 text-muted text-xs">
-            Hard-wipe app and/or gbrain databases (public schema including
-            extensions). Recreate with Prisma / gbrain CLI / seed afterward.
+            Store gbrain OAuth client credentials so the Bun API can call MCP.
+          </p>
+          <Link
+            href="/gbrain-connection"
+            className="mb-4 flex w-full items-center justify-center rounded border border-line bg-transparent px-3.5 py-2 text-center text-ink hover:border-ink"
+          >
+            Connect to gbrain
+          </Link>
+          <p className="mt-0 mb-2 text-muted text-xs">
+            Hard-wipe the app database only. Wipe the gbrain DB in pgAdmin (see
+            docs/GBRAIN_SETUP.md).
           </p>
           <button
             type="button"
@@ -316,7 +323,7 @@ export function AuthPanel() {
             disabled={busy}
             onClick={() => setNukeConfirmOpen(true)}
           >
-            Nuke Database
+            Nuke App DB
           </button>
         </div>
       </div>
@@ -348,50 +355,32 @@ export function AuthPanel() {
               id="nuke-dialog-title"
               className="m-0 pr-8 font-display text-ink text-lg"
             >
-              Nuke Database
+              Nuke App DB?
             </h2>
             <p className="mt-2 mb-0 text-muted text-sm">
               Drops the entire <code className="font-mono text-xs">public</code>{" "}
-              schema (tables and extensions). Cannot be undone. Afterward run
-              Prisma migrate,{" "}
-              <code className="font-mono text-xs">setup:gbrain</code>, and{" "}
-              <code className="font-mono text-xs">seed</code> as needed.
+              schema on{" "}
+              <code className="font-mono text-xs">APP_DATABASE_URL</code>{" "}
+              (tables and extensions). Cannot be undone. Afterward run Prisma
+              migrate and{" "}
+              <code className="font-mono text-xs">bun run seed</code>. Re-enter
+              OAuth credentials on{" "}
+              <code className="font-mono text-xs">/gbrain-connection</code> if
+              needed.
             </p>
             {nukeMutation.isError ? (
               <p className="mt-3 mb-0 text-danger text-sm">
                 {errorMessage(nukeMutation.error)}
               </p>
             ) : null}
-            <div className="mt-4 flex flex-col gap-2">
+            <div className="mt-4 flex justify-end">
               <button
                 type="button"
-                className="w-full rounded border border-danger bg-transparent px-3.5 py-2 text-danger text-sm hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded border border-danger bg-danger px-3.5 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={nukeMutation.isPending}
-                onClick={() => nukeMutation.mutate("app")}
+                onClick={() => nukeMutation.mutate()}
               >
-                {nukeMutation.isPending && nukeMutation.variables === "app"
-                  ? "Nuking…"
-                  : "Nuke App DB"}
-              </button>
-              <button
-                type="button"
-                className="w-full rounded border border-danger bg-transparent px-3.5 py-2 text-danger text-sm hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={nukeMutation.isPending}
-                onClick={() => nukeMutation.mutate("gbrain")}
-              >
-                {nukeMutation.isPending && nukeMutation.variables === "gbrain"
-                  ? "Nuking…"
-                  : "Nuke Gbrain DB"}
-              </button>
-              <button
-                type="button"
-                className="w-full rounded border border-danger bg-danger px-3.5 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={nukeMutation.isPending}
-                onClick={() => nukeMutation.mutate("both")}
-              >
-                {nukeMutation.isPending && nukeMutation.variables === "both"
-                  ? "Nuking…"
-                  : "Nuke Gbrain and App DB"}
+                {nukeMutation.isPending ? "Nuking…" : "Nuke App DB"}
               </button>
             </div>
           </div>

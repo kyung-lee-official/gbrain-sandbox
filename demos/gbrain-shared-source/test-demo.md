@@ -10,7 +10,7 @@ This page exists to verify gbrain sync, embedding, and search in `gbrain-sandbox
 
 ## What this brain is for
 
-`gbrain-sandbox` is a project-level brain with markdown in `shared-source/` and images in `assets/`. Run all `gbrain` commands from the repo root.
+`gbrain-sandbox` keeps knowledge markdown in the nested **gbrain** git checkout at `apps/gbrain/shared-source/`. Run all `gbrain` commands from `apps/gbrain`. Demo pages are copied here by `bun run inject:gbrain-demos` from the monorepo.
 
 ## Verification Q&A (unique to this file)
 
@@ -38,7 +38,7 @@ After `gbrain sync` and `gbrain embed --stale`, try:
 - `gbrain query "What is the codename of the sandbox verification protocol?"`
 - `gbrain query "What passphrase unlocks the sandbox test vault?"`
 - `gbrain query "Who is the Chief Archivist of the sandbox brain?"`
-- `gbrain get test-demo`
+- `gbrain get shared-source/test-demo`
 
 ## Cross-file arming (separate pages)
 

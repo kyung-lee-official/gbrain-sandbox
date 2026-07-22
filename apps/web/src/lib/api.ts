@@ -95,10 +95,10 @@ export async function getHealth(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>("/health");
 }
 
-export type NukeTarget = "app" | "gbrain" | "both";
+export type NukeTarget = "app";
 
 export async function nukeDatabase(
-  target: NukeTarget,
+  target: NukeTarget = "app",
 ): Promise<{ ok: boolean; nuked: boolean; target: NukeTarget }> {
   return apiFetch<{ ok: boolean; nuked: boolean; target: NukeTarget }>(
     "/admin/nuke",
@@ -107,6 +107,81 @@ export async function nukeDatabase(
       body: JSON.stringify({ target }),
     },
   );
+}
+
+export type GbrainAuthStatus =
+  | { configured: false }
+  | {
+      configured: true;
+      oauthClientId: string;
+      oauthClientSecret: string;
+    };
+
+export type GbrainConnectionResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export type GbrainAuthSaveResult = {
+  configured: true;
+  oauthClientId: string;
+  oauthClientSecret: string;
+  saved: true;
+  connection: GbrainConnectionResult;
+};
+
+export const GbrainAuthQueryKey = {
+  Status: ["gbrain-auth"] as const,
+} as const;
+
+export async function getGbrainAuth(): Promise<GbrainAuthStatus> {
+  return apiFetch<GbrainAuthStatus>("/admin/gbrain-auth");
+}
+
+export async function saveGbrainAuth(input: {
+  oauthClientId: string;
+  oauthClientSecret: string;
+}): Promise<GbrainAuthSaveResult> {
+  return apiFetch<GbrainAuthSaveResult>("/admin/gbrain-auth", {
+    method: "PUT",
+    body: JSON.stringify({
+      oauthClientId: input.oauthClientId,
+      oauthClientSecret: input.oauthClientSecret,
+    }),
+  });
+}
+
+export async function clearGbrainAuth(): Promise<{
+  ok: boolean;
+  deleted: boolean;
+  configured: false;
+}> {
+  return apiFetch<{ ok: boolean; deleted: boolean; configured: false }>(
+    "/admin/gbrain-auth",
+    { method: "DELETE" },
+  );
+}
+
+export async function testGbrainAuth(input?: {
+  oauthClientId?: string;
+  oauthClientSecret?: string;
+}): Promise<{
+  ok: boolean;
+  connection: GbrainConnectionResult;
+  error?: string;
+}> {
+  return apiFetch<{
+    ok: boolean;
+    connection: GbrainConnectionResult;
+    error?: string;
+  }>("/admin/gbrain-auth/test", {
+    method: "POST",
+    body: JSON.stringify({
+      ...(input?.oauthClientId ? { oauthClientId: input.oauthClientId } : {}),
+      ...(input?.oauthClientSecret
+        ? { oauthClientSecret: input.oauthClientSecret }
+        : {}),
+    }),
+  });
 }
 
 export async function listUsers(): Promise<ApiUser[]> {

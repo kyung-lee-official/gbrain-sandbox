@@ -5,25 +5,12 @@ export function appDatabaseUrl(): string {
   return process.env.APP_DATABASE_URL?.trim() || "";
 }
 
-/** gbrain knowledge database — required; never shared with the app DB. */
-export function gbrainDatabaseUrl(): string {
-  return process.env.GBRAIN_DATABASE_URL?.trim() || "";
-}
-
 export function requireAppDatabaseUrl(): string {
   const url = appDatabaseUrl();
   if (!url) {
     throw new Error(
       "Missing APP_DATABASE_URL (e.g. postgresql://…/gbrain_app). App and gbrain DBs are separate.",
     );
-  }
-  return url;
-}
-
-export function requireGbrainDatabaseUrl(): string {
-  const url = gbrainDatabaseUrl();
-  if (!url) {
-    throw new Error("Missing GBRAIN_DATABASE_URL");
   }
   return url;
 }
@@ -71,7 +58,7 @@ export function apiKeyForSeedUser(id: string): string {
   return `demo-key-${id}`;
 }
 
-export const SHARED_SOURCE_ID = "shared-source";
+/** Demo OAuth client name (register manually via gbrain CLI — see README). */
 export const SHARED_OAUTH_CLIENT_NAME = "sandbox-shared";
 
 export function chatModel(): string | undefined {

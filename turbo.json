@@ -5,8 +5,9 @@
       "cache": false,
       "persistent": true
     },
-    "setup:gbrain": {
-      "cache": false
+    "serve": {
+      "cache": false,
+      "persistent": true
     },
     "seed": {
       "cache": false

@@ -6,6 +6,7 @@
       "name": "gbrain-sandbox",
       "devDependencies": {
         "@biomejs/biome": "^2.5.5",
+        "@types/bun": "latest",
         "lefthook": "^2.1.10",
         "turbo": "^2.5.4",
       },
