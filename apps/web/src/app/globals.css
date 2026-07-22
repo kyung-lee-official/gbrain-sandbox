@@ -31,6 +31,8 @@
   body {
     @apply min-h-full bg-canvas text-ink;
     font-family: var(--font-display);
+    scrollbar-color: var(--color-line) var(--color-surface);
+    scrollbar-width: thin;
   }
 
   code,
@@ -40,5 +42,28 @@
   input,
   button {
     font-family: var(--font-mono);
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--color-surface);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border: 2px solid var(--color-surface);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-muted);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: var(--color-surface);
   }
 }

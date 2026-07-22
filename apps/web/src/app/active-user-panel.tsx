@@ -54,7 +54,7 @@ export function ActiveUserPanel({ active }: { active: ApiUser | null }) {
     : null;
 
   return (
-    <aside className="sticky top-4 flex flex-col gap-3 rounded-md border border-line bg-surface p-4">
+    <aside className="sticky top-0 flex h-dvh w-64 shrink-0 flex-col gap-3 overflow-y-auto border-line border-r bg-surface p-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="m-0 font-display text-ink text-lg">Signed in</h2>
         <Link
