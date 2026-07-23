@@ -2,10 +2,10 @@
 
 The Bun/web monorepo and the **gbrain knowledge tree** are separate git repositories.
 
-| Repo | Role |
-| --- | --- |
+| Repo                                 | Role                                                    |
+| ------------------------------------ | ------------------------------------------------------- |
 | **This monorepo** (`gbrain-sandbox`) | API, web UI, architecture docs, demo markdown templates |
-| **`apps/gbrain`** (nested clone) | Pure gbrain project: `shared-source/` + local `.env` |
+| **`apps/gbrain`** (nested clone)     | Pure gbrain project: `shared-source/` + local `.env`    |
 
 Run every `gbrain` CLI command from **`apps/gbrain`** so `./.env` and `./shared-source` resolve correctly. The Bun API never reads that `.env`; it only uses root `GBRAIN_MCP_BASE_URL`.
 
@@ -166,13 +166,13 @@ No gbrain “nuke” CLI. Drop/recreate the knowledge DB in pgAdmin / `psql`, th
 
 Slugs are relative to the **nested** git root (e.g. `shared-source/test-demo`).
 
-| Slug | Fact |
-| --- | --- |
-| `shared-source/test-demo` | protocol codename, vault passphrase, … |
-| `shared-source/north-quay-relay` | callsign `ORION-LATCH` (Pier 7) |
-| `shared-source/duty-roster` | color token `violet-green` (Mira Quill) |
-| `shared-source/heptagon-watch` | watch count `7` |
+| Slug                             | Fact                                    |
+| -------------------------------- | --------------------------------------- |
+| `shared-source/test-demo`        | protocol codename, vault passphrase, …  |
+| `shared-source/north-quay-relay` | callsign `ORION-LATCH` (Pier 7)         |
+| `shared-source/duty-roster`      | color token `violet-green` (Mira Quill) |
+| `shared-source/heptagon-watch`   | watch count `7`                         |
 
 Ask-mode check: _What is the full arming formula for the North Quay Relay?_ → `ORION-LATCH/violet-green/7`.
 
-This sandbox does **not** call gbrain MCP `think`. Ask mode uses `query` + `get_page` + Bun/DeepSeek (see root README).
+This sandbox does **not** call gbrain MCP `think` (its gather path truncates page bodies to about 600 characters). Ask mode uses `query` + `get_page` + Bun/DeepSeek (see root README).

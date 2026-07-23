@@ -6,21 +6,21 @@ All responses are JSON (`Content-Type: application/json`).
 
 ## Auth
 
-| Endpoint                                | Auth                                                 |
-| --------------------------------------- | ---------------------------------------------------- |
-| `GET /health`                           | none                                                 |
-| `POST /admin/nuke`                      | none (sandbox; wipe app DB `public` schema only)     |
-| `GET /admin/gbrain-auth`                | none (sandbox; read stored OAuth client credentials) |
-| `PUT /admin/gbrain-auth`                | none (sandbox; upsert + test via gbrain `/token`)    |
-| `DELETE /admin/gbrain-auth`             | none (sandbox; clear stored credentials)             |
-| `POST /admin/gbrain-auth/test`          | none (sandbox; token exchange smoke test)            |
-| `GET /users`, `GET /users/:id`          | none (sandbox convenience)                           |
-| `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                    |
-| `DELETE /users/:id/memories/:memoryId`  | `Authorization: Bearer <api-key>`                    |
-| `GET /sessions`, `POST /sessions`, `PATCH /sessions/:id` | `Authorization: Bearer <api-key>`           |
-| `POST /users`                           | Bearer if any users exist; open when table is empty  |
-| `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                    |
-| `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                    |
+| Endpoint                                                 | Auth                                                 |
+| -------------------------------------------------------- | ---------------------------------------------------- |
+| `GET /health`                                            | none                                                 |
+| `POST /admin/nuke`                                       | none (sandbox; wipe app DB `public` schema only)     |
+| `GET /admin/gbrain-auth`                                 | none (sandbox; read stored OAuth client credentials) |
+| `PUT /admin/gbrain-auth`                                 | none (sandbox; upsert + test via gbrain `/token`)    |
+| `DELETE /admin/gbrain-auth`                              | none (sandbox; clear stored credentials)             |
+| `POST /admin/gbrain-auth/test`                           | none (sandbox; token exchange smoke test)            |
+| `GET /users`, `GET /users/:id`                           | none (sandbox convenience)                           |
+| `GET /users/:id/data`                                    | `Authorization: Bearer <api-key>`                    |
+| `DELETE /users/:id/memories/:memoryId`                   | `Authorization: Bearer <api-key>`                    |
+| `GET /sessions`, `POST /sessions`, `PATCH /sessions/:id` | `Authorization: Bearer <api-key>`                    |
+| `POST /users`                                            | Bearer if any users exist; open when table is empty  |
+| `PATCH /users/:id`, `DELETE /users/:id`                  | `Authorization: Bearer <api-key>`                    |
+| `POST /query`, `POST /remember`                          | `Authorization: Bearer <api-key>`                    |
 
 Seed users (after `bun run seed`; stored in `app_users`):
 
@@ -279,7 +279,7 @@ Requires Bearer. Creates a new empty chat session for the caller.
 
 ### `PATCH /sessions/:id`
 
-Requires Bearer. Updates the session title (must belong to the caller). Trimmed empty string clears to `null`.
+Requires Bearer. Updates the session title (must belong to the caller). The `title` key is required (`string` or explicit `null`). Trimmed empty string clears to `null`.
 
 **Request**
 
@@ -287,7 +287,7 @@ Requires Bearer. Updates the session title (must belong to the caller). Trimmed 
 { "title": "North Quay notes" }
 ```
 
-**200** — updated session object. **404** if missing / not owned.
+**200** — updated session object. **400** if `title` is missing or not a string/`null`. **404** if missing / not owned.
 
 ### `POST /query`
 
@@ -303,11 +303,11 @@ Ask against shared gbrain knowledge. Optional `mode` selects the tool path.
 }
 ```
 
-| Field       | Required | Notes                                                              |
-| ----------- | -------- | ------------------------------------------------------------------ |
-| `message`   | yes      | Trimmed; empty → `400`                                             |
-| `mode`      | no       | `ask` (default), `query` (hybrid retrieval), or `search` (keyword) |
-| `sessionId` | no       | Ask only; must belong to the caller. Omit → latest or new session  |
+| Field       | Required | Notes                                                                                          |
+| ----------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `message`   | yes      | Trimmed; empty → `400`                                                                         |
+| `mode`      | no       | `ask` (default), `query` (hybrid retrieval), or `search` (keyword)                             |
+| `sessionId` | no       | Ask only; must belong to the caller. Omit → latest or new session. Unknown / not owned → `404` |
 
 | Mode     | gbrain tools used                  | Behavior                                                                             |
 | -------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
@@ -315,7 +315,7 @@ Ask against shared gbrain knowledge. Optional `mode` selects the tool path.
 | `query`  | `query`                            | Hybrid retrieval only (no LLM, no chat write)                                        |
 | `search` | `search`                           | Keyword / BM25 retrieval only (no LLM, no chat write)                                |
 
-This API never calls gbrain MCP `think`. Ask mode synthesizes in Bun after `query` + `get_page`.
+This API never calls gbrain MCP `think` (gbrain’s gather path truncates page bodies to about 600 characters; see root README). Ask mode synthesizes in Bun after `query` + `get_page`. Personal memories are Postgres FTS in Bun and are injected into the synthesis prompt — they are not sent to gbrain `query`.
 
 **200** (`mode: "ask"`)
 
@@ -351,6 +351,7 @@ This API never calls gbrain MCP `think`. Ask mode synthesizes in Bun after `quer
 | ------ | ---------------------------------------------------------- |
 | `400`  | Invalid JSON, empty `message`, or invalid `mode`           |
 | `401`  | Missing/invalid Bearer token                               |
+| `404`  | `sessionId` set but not found / not owned (ask mode)       |
 | `502`  | gbrain OAuth/MCP tool failed, or DeepSeek synthesis failed |
 
 ### `POST /remember`
