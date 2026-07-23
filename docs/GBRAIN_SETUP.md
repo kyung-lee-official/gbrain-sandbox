@@ -173,4 +173,6 @@ Slugs are relative to the **nested** git root (e.g. `shared-source/test-demo`).
 | `shared-source/duty-roster` | color token `violet-green` (Mira Quill) |
 | `shared-source/heptagon-watch` | watch count `7` |
 
-Think-mode check: _What is the full arming formula for the North Quay Relay?_ → `ORION-LATCH/violet-green/7`.
+Ask-mode check: _What is the full arming formula for the North Quay Relay?_ → `ORION-LATCH/violet-green/7`.
+
+This sandbox does **not** call gbrain MCP `think`. Ask mode uses `query` + `get_page` + Bun/DeepSeek (see root README).

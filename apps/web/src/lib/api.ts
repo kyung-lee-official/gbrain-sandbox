@@ -2,7 +2,7 @@ import { apiFetch } from "./api-client";
 
 export { ApiError, apiBaseUrl } from "./api-client";
 
-export type AskMode = "think" | "query" | "search";
+export type AskMode = "ask" | "query" | "search";
 
 export type ApiUser = {
   id: string;

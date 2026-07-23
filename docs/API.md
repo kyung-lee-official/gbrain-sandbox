@@ -283,30 +283,32 @@ Ask against shared gbrain knowledge. Optional `mode` selects the tool path.
 ```json
 {
   "message": "What is the sandbox verification protocol codename?",
-  "mode": "think",
-  "sessionId": "optional-uuid-for-think"
+  "mode": "ask",
+  "sessionId": "optional-uuid-for-ask"
 }
 ```
 
-| Field       | Required | Notes                                                                |
-| ----------- | -------- | -------------------------------------------------------------------- |
-| `message`   | yes      | Trimmed; empty → `400`                                               |
-| `mode`      | no       | `think` (default), `query` (hybrid retrieval), or `search` (keyword) |
-| `sessionId` | no       | Think only; must belong to the caller. Omit → latest or new session  |
+| Field       | Required | Notes                                                              |
+| ----------- | -------- | ------------------------------------------------------------------ |
+| `message`   | yes      | Trimmed; empty → `400`                                             |
+| `mode`      | no       | `ask` (default), `query` (hybrid retrieval), or `search` (keyword) |
+| `sessionId` | no       | Ask only; must belong to the caller. Omit → latest or new session  |
 
-| Mode     | gbrain tool                        | Behavior                                                                             |
+| Mode     | gbrain tools used                  | Behavior                                                                             |
 | -------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
-| `think`  | `query` + `get_page`, then Bun LLM | Hybrid retrieve, load full page(s), synthesize with DeepSeek; chat + personal memory |
+| `ask`    | `query` + `get_page`, then Bun LLM | Hybrid retrieve, load full page(s), synthesize with DeepSeek; chat + personal memory |
 | `query`  | `query`                            | Hybrid retrieval only (no LLM, no chat write)                                        |
 | `search` | `search`                           | Keyword / BM25 retrieval only (no LLM, no chat write)                                |
 
-**200** (`mode: "think"`)
+This API never calls gbrain MCP `think`. Ask mode synthesizes in Bun after `query` + `get_page`.
+
+**200** (`mode: "ask"`)
 
 ```json
 {
   "userId": "lily",
   "sessionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "mode": "think",
+  "mode": "ask",
   "answer": "..."
 }
 ```
@@ -321,12 +323,12 @@ Ask against shared gbrain knowledge. Optional `mode` selects the tool path.
 }
 ```
 
-| Field       | Meaning                                                          |
-| ----------- | ---------------------------------------------------------------- |
-| `userId`    | Authenticated user                                               |
-| `sessionId` | Present for `think` only (selected or latest chat session)       |
-| `mode`      | Echo of the selected mode                                        |
-| `answer`    | Synthesis text (`think`) or retrieval payload (`query`/`search`) |
+| Field       | Meaning                                                        |
+| ----------- | -------------------------------------------------------------- |
+| `userId`    | Authenticated user                                             |
+| `sessionId` | Present for `ask` only (selected or latest chat session)       |
+| `mode`      | Echo of the selected mode                                      |
+| `answer`    | Synthesis text (`ask`) or retrieval payload (`query`/`search`) |
 
 **Errors**
 
@@ -392,11 +394,11 @@ curl.exe -s --max-time 10 -X POST http://localhost:3132/users \
   -H "Content-Type: application/json" \
   -d "{\"id\":\"mina\"}"
 
-# think (default) — query + get_page + Bun DeepSeek synthesis
+# ask (default) — query + get_page + Bun DeepSeek synthesis
 curl.exe -s --max-time 60 -X POST http://localhost:3132/query \
   -H "Authorization: Bearer demo-key-lily" \
   -H "Content-Type: application/json" \
-  -d "{\"message\":\"What is the sandbox verification protocol codename?\",\"mode\":\"think\"}"
+  -d "{\"message\":\"What is the sandbox verification protocol codename?\",\"mode\":\"ask\"}"
 
 # query — hybrid retrieval (no LLM)
 curl.exe -s --max-time 30 -X POST http://localhost:3132/query \

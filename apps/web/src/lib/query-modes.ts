@@ -5,7 +5,7 @@ export const QUERY_TAB_ROUTES = [
   {
     href: "/ask",
     label: "ask",
-    mode: "think" as const satisfies AskMode,
+    mode: "ask" as const satisfies AskMode,
     help: "retrieve with gbrain, synthesize with LLM",
   },
   {

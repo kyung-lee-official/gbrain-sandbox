@@ -1,4 +1,4 @@
-import { chatModel, mcpUrl, oauthTokenUrl } from "./config.ts";
+import { mcpUrl, oauthTokenUrl } from "./config.ts";
 import { type GbrainAuth, getGbrainAuth } from "./db.ts";
 
 const MCP_PROTOCOL = "2024-11-05";
@@ -77,7 +77,7 @@ async function fetchOAuthToken(
     grant_type: "client_credentials",
     client_id: auth.oauth_client_id,
     client_secret: auth.oauth_client_secret,
-    // query / search / get_page are read-scoped; think-mode synthesis runs in Bun.
+    // query / search / get_page are read-scoped; ask-mode synthesis runs in Bun.
     scope: "read",
   });
 
@@ -275,7 +275,7 @@ export async function gbrainQueryHits(query: string): Promise<unknown> {
   return parsed ?? [];
 }
 
-/** Full page body for a slug (avoids think's 600-char gather clips). */
+/** Full page body for a slug (used by ask-mode hydrate). */
 export async function gbrainGetPage(slug: string): Promise<GbrainPage> {
   const result = await callGbrainTool("get_page", { slug });
   const { parsed } = extractToolPayload(result);
@@ -312,13 +312,4 @@ export async function gbrainSearch(query: string): Promise<string> {
 export async function gbrainQuery(query: string): Promise<string> {
   const result = await callGbrainTool("query", { query });
   return extractToolText(result);
-}
-
-/** Legacy gbrain think (600-char page clips). Prefer answerWithHydratedPages. */
-export async function gbrainThink(question: string): Promise<string> {
-  const model = chatModel();
-  const arguments_: Record<string, string> = { question };
-  if (model) arguments_.model = model;
-  const result = await callGbrainTool("think", arguments_);
-  return extractToolText(result, { preferAnswer: true });
 }

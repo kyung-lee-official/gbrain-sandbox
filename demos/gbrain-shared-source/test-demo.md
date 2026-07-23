@@ -47,4 +47,4 @@ Knowledge for the North Quay Relay is **split** across `north-quay-relay.md`, `d
 **Q: What is the full arming formula for the North Quay Relay?**  
 A: `ORION-LATCH/violet-green/7` (callsign + color token + watch count; one piece per file).
 
-Use think mode after sync + embed — hydrate should load multiple slugs when scores stay above `HYDRATE_SCORE_RATIO`.
+Use ask mode after sync + embed — hydrate should load multiple slugs when scores stay above `HYDRATE_SCORE_RATIO`.

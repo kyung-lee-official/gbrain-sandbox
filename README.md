@@ -46,7 +46,7 @@ flowchart TB
   subgraph bun [Bun API :3132]
     Auth[Auth api-key]
     Remember["POST /remember"]
-    Query["POST /query<br/>mode think|query|search"]
+    Query["POST /query<br/>mode ask|query|search"]
     Mem[(app_memories FTS)]
     Chat[(app_sessions / app_messages)]
     Build[Build synthesis prompt<br/>chat + personal notes + full pages]
@@ -78,9 +78,9 @@ flowchart TB
 
   Remember --> Mem
 
-  Query -->|think| Chat
-  Query -->|think| Mem
-  Query -->|think| Build
+  Query -->|ask| Chat
+  Query -->|ask| Mem
+  Query -->|ask| Build
   Query -->|query or search| Retrieve
   Build --> Retrieve
   Retrieve --> Pages
@@ -97,13 +97,15 @@ flowchart TB
 | Path                        | Embedding (Ollama)                                         | LLM (DeepSeek)                          |
 | --------------------------- | ---------------------------------------------------------- | --------------------------------------- |
 | Maintainer `sync` / `embed` | Yes — embed shared chunks into the brain                   | No                                      |
-| `POST /query` `mode=think`  | Yes — hybrid `query` embeds the question                   | Yes — Bun synthesizes from full page(s) |
+| `POST /query` `mode=ask`    | Yes — hybrid `query` embeds the question                   | Yes — Bun synthesizes from full page(s) |
 | `POST /query` `mode=query`  | Yes — hybrid retrieve only (API logs hit scores)           | No                                      |
 | `POST /query` `mode=search` | No — keyword / BM25 only                                   | No                                      |
 | `POST /remember`            | No — row in `app_memories` only                            | No                                      |
-| Personal notes (think only) | No — Postgres FTS, then injected into the synthesis prompt | Indirect — LLM sees them in the prompt  |
+| Personal notes (ask only)   | No — Postgres FTS, then injected into the synthesis prompt | Indirect — LLM sees them in the prompt  |
 
-**Think mode:** chat history + this user's `app_memories` → gbrain `query` → hydrate (`HYDRATE_*`) → `get_page` → Bun DeepSeek → store turn. Does **not** call gbrain MCP `think`.
+**Ask mode:** chat history + this user's `app_memories` → gbrain `query` → hydrate (`HYDRATE_*`) → `get_page` → Bun DeepSeek → store turn.
+
+**gbrain MCP `think` is not used** in this architecture. Synthesis always runs in Bun (DeepSeek), with full pages from `get_page` rather than gbrain’s clipped gather path.
 
 **Query / search:** retrieval only. **Remember:** `app_memories` for `user_id` only. One shared OAuth client (stored in `app_gbrain_auth`) calls gbrain over HTTP — setup in [`docs/GBRAIN_SETUP.md`](docs/GBRAIN_SETUP.md); paste credentials on `/gbrain-connection`.
 
@@ -195,7 +197,7 @@ sequenceDiagram
 | `GET /users/:id`    | none                      | —                                       |
 | `PATCH /users/:id`  | Bearer                    | `{ "apiKey?" }` (omit to regenerate)    |
 | `DELETE /users/:id` | Bearer                    | —                                       |
-| `POST /query`       | Bearer                    | `{ "message": "...", "mode": "think" }` |
+| `POST /query`       | Bearer                    | `{ "message": "...", "mode": "ask" }`   |
 | `POST /remember`    | Bearer                    | `{ "content": "..." }`                  |
 | `POST /admin/nuke`  | none                      | `{ "target": "app" }` — app DB only     |
 | `GET/PUT/DELETE /admin/gbrain-auth` | none | OAuth client credentials for Bun → gbrain |
@@ -212,7 +214,7 @@ Demo knowledge Q&A (after gbrain sync): see [`docs/GBRAIN_SETUP.md`](docs/GBRAIN
 | `app_users`       | App users + API keys (seeded: lily, haewon, sullyoon, bae, jiwoo, kyujin) |
 | `app_gbrain_auth` | Long-lived gbrain OAuth **client** id/secret (app → MCP; not per-user)    |
 | `app_memories`    | Personal notes (`user_id` + `slug` + `content`)                           |
-| `app_sessions`    | Chat threads per user (think mode; selectable in the UI)                  |
+| `app_sessions`    | Chat threads per user (ask mode; selectable in the UI)                    |
 | `app_messages`    | Chat history                                                              |
 
 **`slug`:** short unique id for one memory note per user. Auto-assigned on `POST /remember`.
@@ -228,13 +230,13 @@ SELECT role, left(content, 80) FROM app_messages ORDER BY created_at DESC LIMIT 
 | Variable                          | Purpose                                                                  |
 | --------------------------------- | ------------------------------------------------------------------------ |
 | `APP_DATABASE_URL`                | Bun/Prisma app DB (required; e.g. `…/gbrain_app`)                        |
-| `DEEPSEEK_API_KEY`                | Bun think-mode synthesis (required for `mode=think`)                     |
+| `DEEPSEEK_API_KEY`                | Bun ask-mode synthesis (required for `mode=ask`)                         |
 | `GBRAIN_CHAT_MODEL`               | Default synthesis model id (e.g. `deepseek:deepseek-v4-flash`)           |
 | `SYNTHESIS_MODEL`                 | Optional override; DeepSeek model id without `deepseek:` prefix          |
 | `HYDRATE_SCORE_RATIO`             | **Required** — min score vs top hit to include a page (e.g. `0.65`)      |
-| `HYDRATE_MAX_PAGES`               | **Required** — max pages to load per think request (e.g. `5`)            |
+| `HYDRATE_MAX_PAGES`               | **Required** — max pages to load per ask request (e.g. `5`)              |
 | `HYDRATE_MAX_CHARS_PER_PAGE`      | **Required** — max chars per hydrated page (e.g. `8000`)                 |
-| `HYDRATE_MAX_TOTAL_CHARS`         | **Required** — max total hydrated chars per think request (e.g. `24000`) |
+| `HYDRATE_MAX_TOTAL_CHARS`         | **Required** — max total hydrated chars per ask request (e.g. `24000`)   |
 | `GBRAIN_MCP_BASE_URL`             | gbrain HTTP base (default `http://localhost:3131`)                       |
 | `PORT`                            | Bun API port (default `3132`)                                            |
 | `API_URL` / `NEXT_PUBLIC_API_URL` | Next.js → Bun base URL (default `http://localhost:3132`)                 |
@@ -245,6 +247,6 @@ gbrain-only variables: template in [`docs/GBRAIN_SETUP.md`](docs/GBRAIN_SETUP.md
 
 - Real user login / signup API (JWT); demo uses hardcoded API keys
 - Vector embeddings for personal memory (Postgres FTS + recent fallback)
-- Rate limits / quotas on think-mode synthesis
+- Rate limits / quotas on ask-mode synthesis
 - TLS / production deployment
-- Using gbrain MCP `think` for answers (sandbox synthesizes in Bun instead)
+- Calling gbrain MCP `think` (intentionally unused; see architecture note above)

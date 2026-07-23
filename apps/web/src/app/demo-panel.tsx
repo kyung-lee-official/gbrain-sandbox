@@ -95,7 +95,7 @@ export function DemoPanel({ mode }: { mode: AskMode }) {
         apiKey: active.apiKey,
         message: values.message,
         mode,
-        sessionId: mode === "think" ? activeSessionId : null,
+        sessionId: mode === "ask" ? activeSessionId : null,
       });
     },
     onSuccess: async (data) => {
@@ -152,7 +152,7 @@ export function DemoPanel({ mode }: { mode: AskMode }) {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-8 pb-4">
           <div className="mx-auto max-w-4xl">
-            {mode === "think" ? (
+            {mode === "ask" ? (
               <UserDataPanel
                 key={active.id}
                 active={active}
@@ -197,10 +197,10 @@ export function DemoPanel({ mode }: { mode: AskMode }) {
                   {askForm.formState.errors.message.message}
                 </p>
               ) : null}
-              {mode === "think" && pending ? (
+              {mode === "ask" && pending ? (
                 <p className="m-0 text-muted text-sm">Calling Bun API…</p>
               ) : null}
-              {mode === "think" && payload?.error ? (
+              {mode === "ask" && payload?.error ? (
                 <p className="m-0 text-danger text-sm">{payload.error}</p>
               ) : null}
             </form>

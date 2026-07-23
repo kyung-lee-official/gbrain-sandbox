@@ -35,7 +35,7 @@ import {
 import { closePrisma } from "./prisma.ts";
 import { logRetrievalHits, parseRetrievalHits } from "./retrieval.ts";
 
-export type AskMode = "think" | "query" | "search";
+export type AskMode = "ask" | "query" | "search";
 
 /** Browser UI is on :3133; without these, fetch fails as "Failed to fetch". */
 const CORS_HEADERS: Record<string, string> = {
@@ -79,8 +79,8 @@ async function resolveUser(req: Request) {
 }
 
 function parseAskMode(raw: unknown): AskMode | null {
-  if (raw === undefined || raw === null || raw === "") return "think";
-  if (raw === "think" || raw === "query" || raw === "search") return raw;
+  if (raw === undefined || raw === null || raw === "") return "ask";
+  if (raw === "ask" || raw === "query" || raw === "search") return raw;
   return null;
 }
 
@@ -127,7 +127,7 @@ async function handleQuery(req: Request): Promise<Response> {
 
   const mode = parseAskMode(body.mode);
   if (!mode) {
-    return json({ error: "mode must be 'think', 'query', or 'search'" }, 400);
+    return json({ error: "mode must be 'ask', 'query', or 'search'" }, 400);
   }
 
   let answer: string;
@@ -146,7 +146,7 @@ async function handleQuery(req: Request): Promise<Response> {
             : JSON.stringify(hitsRaw, null, 2);
         break;
       }
-      case "think": {
+      case "ask": {
         const requested = body.sessionId?.trim();
         let sessionId: string;
         if (requested) {
@@ -620,7 +620,7 @@ console.log(`gbrain-sandbox API listening on http://localhost:${server.port}`);
 console.log(
   "User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id, GET /users/:id/data, DELETE /users/:id/memories/:memoryId",
 );
-console.log("Sessions: GET/POST /sessions; think mode accepts body.sessionId");
+console.log("Sessions: GET/POST /sessions; ask mode accepts body.sessionId");
 console.log(
   "Admin: POST /admin/nuke { target: app }; GET/PUT/DELETE /admin/gbrain-auth; POST /admin/gbrain-auth/test",
 );

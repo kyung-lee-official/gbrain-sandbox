@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 
 type ActiveUserState = {
   activeUserId: string | null;
-  /** Current chat session for the signed-in user (think mode). */
+  /** Current chat session for the signed-in user (ask mode). */
   activeSessionId: string | null;
   setActiveUserId: (id: string | null) => void;
   setActiveSessionId: (id: string | null) => void;
