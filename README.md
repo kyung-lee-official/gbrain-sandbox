@@ -105,7 +105,7 @@ flowchart TB
 
 **Ask mode:** chat history + this user's `app_memories` → gbrain `query` → hydrate (`HYDRATE_*`) → `get_page` → Bun DeepSeek → store turn.
 
-**gbrain MCP `think` is not used** in this architecture. Synthesis always runs in Bun (DeepSeek), with full pages from `get_page` rather than gbrain’s clipped gather path.
+**gbrain MCP `think` is not used** in this architecture. Its gather path truncates page bodies (about **600 characters** per page), which drops too much context for ask answers. Synthesis always runs in Bun (DeepSeek) after `query` + `get_page` so full page text can be hydrated under `HYDRATE_*`.
 
 **Query / search:** retrieval only. **Remember:** `app_memories` for `user_id` only. One shared OAuth client (stored in `app_gbrain_auth`) calls gbrain over HTTP — setup in [`docs/GBRAIN_SETUP.md`](docs/GBRAIN_SETUP.md); paste credentials on `/gbrain-connection`.
 
