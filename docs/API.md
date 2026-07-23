@@ -17,7 +17,7 @@ All responses are JSON (`Content-Type: application/json`).
 | `GET /users`, `GET /users/:id`          | none (sandbox convenience)                           |
 | `GET /users/:id/data`                   | `Authorization: Bearer <api-key>`                    |
 | `DELETE /users/:id/memories/:memoryId`  | `Authorization: Bearer <api-key>`                    |
-| `GET /sessions`, `POST /sessions`       | `Authorization: Bearer <api-key>`                    |
+| `GET /sessions`, `POST /sessions`, `PATCH /sessions/:id` | `Authorization: Bearer <api-key>`           |
 | `POST /users`                           | Bearer if any users exist; open when table is empty  |
 | `PATCH /users/:id`, `DELETE /users/:id` | `Authorization: Bearer <api-key>`                    |
 | `POST /query`, `POST /remember`         | `Authorization: Bearer <api-key>`                    |
@@ -261,6 +261,7 @@ Requires Bearer. Lists the caller's chat sessions, newest activity first (`updat
   "sessions": [
     {
       "id": "uuid",
+      "title": "North Quay notes",
       "createdAt": "2026-07-22T03:00:00.000Z",
       "updatedAt": "2026-07-22T03:10:00.000Z"
     }
@@ -268,11 +269,25 @@ Requires Bearer. Lists the caller's chat sessions, newest activity first (`updat
 }
 ```
 
+`title` may be `null` when unset.
+
 ### `POST /sessions`
 
 Requires Bearer. Creates a new empty chat session for the caller.
 
 **201** — one session object (same shape as list items).
+
+### `PATCH /sessions/:id`
+
+Requires Bearer. Updates the session title (must belong to the caller). Trimmed empty string clears to `null`.
+
+**Request**
+
+```json
+{ "title": "North Quay notes" }
+```
+
+**200** — updated session object. **404** if missing / not owned.
 
 ### `POST /query`
 

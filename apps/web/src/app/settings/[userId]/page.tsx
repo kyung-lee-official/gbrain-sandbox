@@ -1,4 +1,4 @@
-import { SettingsPanel } from "../../settings-panel";
+import { SettingsPanel } from "@/components/settings-panel";
 
 type Props = {
   params: Promise<{ userId: string }>;

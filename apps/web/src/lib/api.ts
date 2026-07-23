@@ -32,6 +32,7 @@ export type UserMemoryRow = {
 
 export type UserSessionRow = {
   id: string;
+  title: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -277,6 +278,21 @@ export async function createSession(apiKey: string): Promise<UserSessionRow> {
     method: "POST",
     apiKey,
   });
+}
+
+export async function patchSessionTitle(input: {
+  apiKey: string;
+  sessionId: string;
+  title: string | null;
+}): Promise<UserSessionRow> {
+  return apiFetch<UserSessionRow>(
+    `/sessions/${encodeURIComponent(input.sessionId)}`,
+    {
+      method: "PATCH",
+      apiKey: input.apiKey,
+      body: JSON.stringify({ title: input.title }),
+    },
+  );
 }
 
 export async function postQuery(input: {

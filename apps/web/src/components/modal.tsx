@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type ModalProps = {
   open: boolean;
@@ -20,6 +21,12 @@ export function Modal({
   closeDisabled = false,
   children,
 }: ModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -29,9 +36,9 @@ export function Modal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, closeDisabled, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5"
       onClick={() => {
@@ -59,6 +66,7 @@ export function Modal({
         </h2>
         <div className="mt-2">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

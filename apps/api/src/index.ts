@@ -23,6 +23,7 @@ import {
   listUsers,
   nukeDatabases,
   searchMemoriesByUser,
+  updateSessionTitle,
   updateUserApiKey,
   upsertGbrainAuth,
 } from "./db.ts";
@@ -97,11 +98,13 @@ function newApiKey(userId: string): string {
 
 function sessionJson(session: {
   id: string;
+  title: string | null;
   created_at: Date;
   updated_at: Date;
 }) {
   return {
     id: session.id,
+    title: session.title,
     createdAt: isoFromDate(session.created_at),
     updatedAt: isoFromDate(session.updated_at),
   };
@@ -203,6 +206,42 @@ async function handleCreateSession(req: Request): Promise<Response> {
 
   const session = await createSession(user.id);
   return json(sessionJson(session), 201);
+}
+
+async function handlePatchSession(
+  req: Request,
+  sessionIdParam: string,
+): Promise<Response> {
+  const user = await resolveUser(req);
+  if (!user) return unauthorized();
+
+  const sessionId = sessionIdParam.trim();
+  if (!sessionId) return json({ error: "Invalid session id" }, 400);
+
+  let body: { title?: string | null };
+  try {
+    body = (await req.json()) as { title?: string | null };
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (!("title" in body)) {
+    return json({ error: "title is required (string or null)" }, 400);
+  }
+
+  let title: string | null;
+  if (body.title === null) {
+    title = null;
+  } else if (typeof body.title === "string") {
+    const trimmed = body.title.trim();
+    title = trimmed.length > 0 ? trimmed : null;
+  } else {
+    return json({ error: "title must be a string or null" }, 400);
+  }
+
+  const session = await updateSessionTitle(sessionId, user.id, title);
+  if (!session) return json({ error: "Session not found" }, 404);
+  return json(sessionJson(session));
 }
 
 async function handleRemember(req: Request): Promise<Response> {
@@ -513,11 +552,7 @@ async function handleGetUserData(
       content: m.content,
       createdAt: isoFromDate(m.created_at),
     })),
-    sessions: sessions.map((s) => ({
-      id: s.id,
-      createdAt: isoFromDate(s.created_at),
-      updatedAt: isoFromDate(s.updated_at),
-    })),
+    sessions: sessions.map((s) => sessionJson(s)),
     messages: {
       items: messagePageResult.items.map((m) => ({
         id: m.id,
@@ -586,6 +621,11 @@ const server = Bun.serve({
     if (req.method === "POST" && path === "/sessions")
       return handleCreateSession(req);
 
+    const sessionMatch = path.match(/^\/sessions\/([^/]+)$/);
+    if (req.method === "PATCH" && sessionMatch) {
+      return handlePatchSession(req, decodeURIComponent(sessionMatch[1]!));
+    }
+
     if (req.method === "GET" && path === "/users") return handleListUsers();
     if (req.method === "POST" && path === "/users")
       return handleCreateUser(req);
@@ -620,7 +660,9 @@ console.log(`gbrain-sandbox API listening on http://localhost:${server.port}`);
 console.log(
   "User CRUD: GET/POST /users, GET/PATCH/DELETE /users/:id, GET /users/:id/data, DELETE /users/:id/memories/:memoryId",
 );
-console.log("Sessions: GET/POST /sessions; ask mode accepts body.sessionId");
+console.log(
+  "Sessions: GET/POST /sessions, PATCH /sessions/:id; ask mode accepts body.sessionId",
+);
 console.log(
   "Admin: POST /admin/nuke { target: app }; GET/PUT/DELETE /admin/gbrain-auth; POST /admin/gbrain-auth/test",
 );

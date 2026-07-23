@@ -30,9 +30,20 @@ export type AppMemory = {
 export type AppSession = {
   id: string;
   user_id: string;
+  title: string | null;
   created_at: Date;
   updated_at: Date;
 };
+
+function mapSessionRow(row: Record<string, unknown>): AppSession {
+  return {
+    id: row.id as string,
+    user_id: row.user_id as string,
+    title: (row.title as string | null) ?? null,
+    created_at: row.created_at as Date,
+    updated_at: row.updated_at as Date,
+  };
+}
 
 export type GbrainAuth = {
   oauth_client_id: string;
@@ -224,16 +235,11 @@ export async function createSession(userId: string): Promise<AppSession> {
   const rows = await db()`
     INSERT INTO app_sessions (id, user_id)
     VALUES (${newId}::uuid, ${userId})
-    RETURNING id, user_id, created_at, updated_at
+    RETURNING id, user_id, title, created_at, updated_at
   `;
   const row = rows[0];
   if (!row) throw new Error("createSession returned no row");
-  return {
-    id: row.id as string,
-    user_id: row.user_id as string,
-    created_at: row.created_at as Date,
-    updated_at: row.updated_at as Date,
-  };
+  return mapSessionRow(row as Record<string, unknown>);
 }
 
 /** Session owned by `userId`, or null. */
@@ -242,19 +248,29 @@ export async function getSessionOwnedByUser(
   userId: string,
 ): Promise<AppSession | null> {
   const rows = await db()`
-    SELECT id, user_id, created_at, updated_at
+    SELECT id, user_id, title, created_at, updated_at
     FROM app_sessions
     WHERE id = ${sessionId}::uuid AND user_id = ${userId}
     LIMIT 1
   `;
   if (rows.length === 0) return null;
-  const row = rows[0]!;
-  return {
-    id: row.id as string,
-    user_id: row.user_id as string,
-    created_at: row.created_at as Date,
-    updated_at: row.updated_at as Date,
-  };
+  return mapSessionRow(rows[0]! as Record<string, unknown>);
+}
+
+/** Update title for a session owned by `userId`. Empty title clears to null. */
+export async function updateSessionTitle(
+  sessionId: string,
+  userId: string,
+  title: string | null,
+): Promise<AppSession | null> {
+  const rows = await db()`
+    UPDATE app_sessions
+    SET title = ${title}, updated_at = NOW()
+    WHERE id = ${sessionId}::uuid AND user_id = ${userId}
+    RETURNING id, user_id, title, created_at, updated_at
+  `;
+  if (rows.length === 0) return null;
+  return mapSessionRow(rows[0]! as Record<string, unknown>);
 }
 
 export async function touchSession(sessionId: string): Promise<void> {
@@ -354,17 +370,12 @@ export async function listSessionsForUser(
   userId: string,
 ): Promise<AppSession[]> {
   const rows = await db()`
-    SELECT id, user_id, created_at, updated_at
+    SELECT id, user_id, title, created_at, updated_at
     FROM app_sessions
     WHERE user_id = ${userId}
     ORDER BY updated_at DESC
   `;
-  return rows.map((row) => ({
-    id: row.id as string,
-    user_id: row.user_id as string,
-    created_at: row.created_at as Date,
-    updated_at: row.updated_at as Date,
-  }));
+  return rows.map((row) => mapSessionRow(row as Record<string, unknown>));
 }
 
 export type MessagePage = {

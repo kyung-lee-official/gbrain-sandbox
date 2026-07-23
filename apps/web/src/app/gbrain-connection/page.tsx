@@ -1,4 +1,4 @@
-import { GbrainConnectionPanel } from "../gbrain-connection-panel";
+import { GbrainConnectionPanel } from "@/components/gbrain-connection-panel";
 
 export default function GbrainConnectionPage() {
   return (
