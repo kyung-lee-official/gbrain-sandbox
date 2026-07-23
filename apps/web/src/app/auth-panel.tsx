@@ -18,6 +18,7 @@ import {
   UserQueryKey,
 } from "@/lib/api";
 import { displayName } from "@/lib/display-name";
+import { Modal } from "./modal";
 
 const createUserSchema = z.object({
   id: z
@@ -126,17 +127,6 @@ export function AuthPanel() {
     },
   });
 
-  useEffect(() => {
-    if (!nukeConfirmOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !nukeMutation.isPending) {
-        setNukeConfirmOpen(false);
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [nukeConfirmOpen, nukeMutation.isPending]);
-
   const busy =
     usersQuery.isFetching ||
     createMutation.isPending ||
@@ -157,7 +147,7 @@ export function AuthPanel() {
   function signIn() {
     if (!selectedId) return;
     setActiveUserId(selectedId);
-    router.push("/");
+    router.push("/ask");
   }
 
   return (
@@ -328,64 +318,38 @@ export function AuthPanel() {
         </div>
       </div>
 
-      {nukeConfirmOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5"
-          onClick={() => {
-            if (!nukeMutation.isPending) setNukeConfirmOpen(false);
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="nuke-dialog-title"
-            className="relative w-full max-w-md rounded-md border border-line bg-surface p-5 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
+      <Modal
+        open={nukeConfirmOpen}
+        title="Nuke App DB?"
+        titleId="nuke-dialog-title"
+        onClose={() => setNukeConfirmOpen(false)}
+        closeDisabled={nukeMutation.isPending}
+      >
+        <p className="m-0 text-muted text-sm">
+          Drops the entire <code className="font-mono text-xs">public</code>{" "}
+          schema on <code className="font-mono text-xs">APP_DATABASE_URL</code>{" "}
+          (tables and extensions). Cannot be undone. Afterward run Prisma
+          migrate and <code className="font-mono text-xs">bun run seed</code>.
+          Re-enter OAuth credentials on{" "}
+          <code className="font-mono text-xs">/gbrain-connection</code> if
+          needed.
+        </p>
+        {nukeMutation.isError ? (
+          <p className="mt-3 mb-0 text-danger text-sm">
+            {errorMessage(nukeMutation.error)}
+          </p>
+        ) : null}
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            className="rounded border border-danger bg-danger px-3.5 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={nukeMutation.isPending}
+            onClick={() => nukeMutation.mutate()}
           >
-            <button
-              type="button"
-              className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded border border-transparent text-lg text-muted leading-none hover:border-line hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
-              aria-label="Close"
-              disabled={nukeMutation.isPending}
-              onClick={() => setNukeConfirmOpen(false)}
-            >
-              ×
-            </button>
-            <h2
-              id="nuke-dialog-title"
-              className="m-0 pr-8 font-display text-ink text-lg"
-            >
-              Nuke App DB?
-            </h2>
-            <p className="mt-2 mb-0 text-muted text-sm">
-              Drops the entire <code className="font-mono text-xs">public</code>{" "}
-              schema on{" "}
-              <code className="font-mono text-xs">APP_DATABASE_URL</code>{" "}
-              (tables and extensions). Cannot be undone. Afterward run Prisma
-              migrate and{" "}
-              <code className="font-mono text-xs">bun run seed</code>. Re-enter
-              OAuth credentials on{" "}
-              <code className="font-mono text-xs">/gbrain-connection</code> if
-              needed.
-            </p>
-            {nukeMutation.isError ? (
-              <p className="mt-3 mb-0 text-danger text-sm">
-                {errorMessage(nukeMutation.error)}
-              </p>
-            ) : null}
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                className="rounded border border-danger bg-danger px-3.5 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={nukeMutation.isPending}
-                onClick={() => nukeMutation.mutate()}
-              >
-                {nukeMutation.isPending ? "Nuking…" : "Nuke App DB"}
-              </button>
-            </div>
-          </div>
+            {nukeMutation.isPending ? "Nuking…" : "Nuke App DB"}
+          </button>
         </div>
-      ) : null}
+      </Modal>
     </section>
   );
 }

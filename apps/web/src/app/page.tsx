@@ -1,5 +1,5 @@
-import { DemoPanel } from "./demo-panel";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <DemoPanel />;
+  redirect("/ask");
 }

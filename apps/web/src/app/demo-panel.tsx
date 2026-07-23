@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useActiveUserStore } from "@/lib/active-user-store";
 import {
@@ -16,23 +16,18 @@ import {
   postQuery,
   UserQueryKey,
 } from "@/lib/api";
+import { modeLabel, tabByMode } from "@/lib/query-modes";
 import { ActiveUserPanel } from "./active-user-panel";
+import { QueryModeTabs } from "./query-mode-tabs";
 import { type ApiPayload, ResponseView } from "./response-view";
+import { SessionStatusChip } from "./session-status-chip";
 import { UserDataPanel } from "./user-data-panel";
 
-const MODE_HELP: Record<AskMode, string> = {
-  think:
-    "query + get_page — full shared pages, DeepSeek synthesis (chat + personal memory)",
-  query: "gbrain query — hybrid retrieval (vector + keyword), no LLM",
-  search: "gbrain search — keyword / BM25 retrieval, no LLM",
-};
-
-const askSchema = z.object({
-  mode: z.enum(["think", "query", "search"]),
+const messageSchema = z.object({
   message: z.string().trim().min(1, "message is required"),
 });
 
-type AskValues = z.infer<typeof askSchema>;
+type MessageValues = z.infer<typeof messageSchema>;
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
@@ -40,7 +35,7 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
-export function DemoPanel() {
+export function DemoPanel({ mode }: { mode: AskMode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const activeUserId = useActiveUserStore((s) => s.activeUserId);
@@ -48,6 +43,7 @@ export function DemoPanel() {
   const setActiveUserId = useActiveUserStore((s) => s.setActiveUserId);
   const [storeReady, setStoreReady] = useState(false);
   const [payload, setPayload] = useState<ApiPayload | null>(null);
+  const tab = tabByMode(mode);
 
   useEffect(() => {
     setStoreReady(useActiveUserStore.persist.hasHydrated());
@@ -87,26 +83,24 @@ export function DemoPanel() {
     }
   }, [storeReady, activeUserId, usersQuery.data, router, setActiveUserId]);
 
-  const askForm = useForm<AskValues>({
-    resolver: zodResolver(askSchema),
-    defaultValues: { mode: "think", message: "" },
+  const askForm = useForm<MessageValues>({
+    resolver: zodResolver(messageSchema),
+    defaultValues: { message: "" },
   });
 
-  const mode = useWatch({ control: askForm.control, name: "mode" });
-
   const askMutation = useMutation({
-    mutationFn: (values: AskValues) => {
+    mutationFn: (values: MessageValues) => {
       if (!active) throw new Error("Select a signed-in user.");
       return postQuery({
         apiKey: active.apiKey,
         message: values.message,
-        mode: values.mode,
-        sessionId: values.mode === "think" ? activeSessionId : null,
+        mode,
+        sessionId: mode === "think" ? activeSessionId : null,
       });
     },
     onSuccess: async (data) => {
       setPayload(data);
-      askForm.reset({ mode: askForm.getValues("mode"), message: "" });
+      askForm.reset({ message: "" });
       if (active) {
         await queryClient.invalidateQueries({
           queryKey: UserQueryKey.DataRoot(active.id),
@@ -137,96 +131,79 @@ export function DemoPanel() {
   }
 
   const apiUrl = apiBaseUrl();
+  const submitLabel = modeLabel(mode);
 
   return (
     <div className="flex h-dvh overflow-hidden">
       <ActiveUserPanel active={active} />
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-8 pb-12">
-        <div className="mx-auto max-w-4xl">
-          <header className="mb-4">
-            <h1 className="mb-1 font-display text-3xl text-ink">
-              gbrain-sandbox
-            </h1>
-            <p className="my-1 text-muted text-sm">
-              Current session:{" "}
-              {activeSessionId ? (
-                <code className="break-all font-mono text-ink text-sm">
-                  {activeSessionId}
-                </code>
-              ) : (
-                <span>none — New chat or Ask (think)</span>
-              )}
-            </p>
-            <p className="my-1 text-muted text-sm">
-              Conversation UI for Bun API at{" "}
-              <code className="font-mono text-sm">{apiUrl}</code>
-            </p>
-            <p
-              className={
-                healthQuery.isLoading
-                  ? "my-1 text-muted text-sm"
-                  : healthOk
-                    ? "my-1 text-ok text-sm"
-                    : "my-1 text-danger text-sm"
-              }
-            >
-              {healthQuery.isLoading
-                ? "API health: checking…"
-                : healthOk
-                  ? "API health: ok"
-                  : `API health: down${healthError ? ` (${healthError})` : ""}`}
-            </p>
-          </header>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="pointer-events-none absolute top-3 left-3 z-20">
+          <div className="pointer-events-auto">
+            <SessionStatusChip
+              apiUrl={apiUrl}
+              sessionId={activeSessionId}
+              healthLoading={healthQuery.isLoading}
+              healthOk={healthOk}
+              healthError={healthError}
+            />
+          </div>
+        </div>
 
-          <div className="flex flex-col gap-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-8 pb-4">
+          <div className="mx-auto max-w-4xl">
+            {mode === "think" ? (
+              <UserDataPanel
+                key={active.id}
+                active={active}
+                sessionId={activeSessionId}
+                lastResponse={payload}
+              />
+            ) : (
+              <ResponseView pending={pending} payload={payload} />
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0 bg-canvas px-5 py-3">
+          <div className="mx-auto flex max-w-4xl flex-col gap-2.5">
+            <QueryModeTabs mode={mode} />
             <form
-              className="flex flex-col gap-2.5 rounded-md border border-line bg-surface p-4"
+              className="flex flex-col gap-2.5"
               onSubmit={askForm.handleSubmit((values) => {
                 setPayload(null);
                 askMutation.mutate(values);
               })}
             >
-              <h2 className="m-0 font-display text-ink text-lg">Ask</h2>
-              <p className="m-0 text-muted text-sm">
-                POST /query — {MODE_HELP[mode]}
-              </p>
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span>Mode</span>
-                <select
-                  className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
+              <div className="relative rounded border border-line bg-surface">
+                <textarea
+                  className="w-full resize-none border-0 bg-transparent py-2 pr-20 pl-2.5 text-ink outline-none disabled:opacity-60"
+                  rows={3}
+                  placeholder="What is the sandbox verification protocol codename?"
                   disabled={pending}
-                  {...askForm.register("mode")}
+                  {...askForm.register("message")}
+                />
+                <button
+                  type="submit"
+                  className="absolute right-2 bottom-2 rounded border border-accent bg-accent px-3 py-1 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={pending || askForm.formState.isSubmitting}
+                  title={tab.help}
                 >
-                  <option value="think">think</option>
-                  <option value="query">query</option>
-                  <option value="search">search</option>
-                </select>
-              </label>
-              <textarea
-                className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-ink disabled:opacity-60"
-                rows={3}
-                placeholder="What is the sandbox verification protocol codename?"
-                disabled={pending}
-                {...askForm.register("message")}
-              />
+                  {pending ? "…" : submitLabel}
+                </button>
+              </div>
               {askForm.formState.errors.message ? (
                 <p className="m-0 text-danger text-sm">
                   {askForm.formState.errors.message.message}
                 </p>
               ) : null}
-              <button
-                type="submit"
-                className="self-start rounded border border-accent bg-accent px-3.5 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={pending || askForm.formState.isSubmitting}
-              >
-                Ask
-              </button>
+              {mode === "think" && pending ? (
+                <p className="m-0 text-muted text-sm">Calling Bun API…</p>
+              ) : null}
+              {mode === "think" && payload?.error ? (
+                <p className="m-0 text-danger text-sm">{payload.error}</p>
+              ) : null}
             </form>
-
-            <ResponseView pending={pending} payload={payload} />
-
-            <UserDataPanel key={active.id} active={active} />
           </div>
         </div>
       </div>

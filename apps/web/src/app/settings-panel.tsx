@@ -191,7 +191,7 @@ export function SettingsPanel({ userId }: { userId: string }) {
             {displayName(user.id)} settings
           </h1>
           <Link
-            href="/"
+            href="/ask"
             className="rounded border border-line bg-transparent px-2 py-0.5 text-muted text-xs no-underline hover:border-ink hover:text-ink"
           >
             Back to chat

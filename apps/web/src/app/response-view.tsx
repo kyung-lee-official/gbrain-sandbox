@@ -1,4 +1,5 @@
 import type { AskMode } from "@/lib/api";
+import { modeLabel } from "@/lib/query-modes";
 
 export type ApiPayload = {
   userId?: string;
@@ -46,7 +47,7 @@ function isRetrievalHitArray(value: unknown): value is RetrievalHit[] {
 
 function RetrievalHits({ hits }: { hits: RetrievalHit[] }) {
   if (hits.length === 0) {
-    return <p className="m-0 text-sm text-muted">No hits.</p>;
+    return <p className="m-0 text-muted text-sm">No hits.</p>;
   }
 
   return (
@@ -60,12 +61,14 @@ function RetrievalHits({ hits }: { hits: RetrievalHit[] }) {
             className="flex flex-col gap-1.5 rounded border border-line bg-canvas p-3"
           >
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <strong>{hit.title?.trim() || hit.slug || `Hit ${index + 1}`}</strong>
+              <strong>
+                {hit.title?.trim() || hit.slug || `Hit ${index + 1}`}
+              </strong>
               {hit.slug ? (
                 <code className="font-mono text-sm">{hit.slug}</code>
               ) : null}
             </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs text-muted">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-muted text-xs">
               <span>score {formatScore(hit.score)}</span>
               {hit.evidence ? <span>{hit.evidence}</span> : null}
               {hit.source_id ? <span>{hit.source_id}</span> : null}
@@ -97,12 +100,12 @@ function ReadableAnswer({ mode, answer }: { mode?: AskMode; answer: string }) {
     const obj = parsed as { answer?: string; gaps?: string[] };
     if (typeof obj.answer === "string" && obj.answer.trim()) {
       return (
-        <div className="font-display text-base leading-snug text-ink">
+        <div className="font-display text-base text-ink leading-snug">
           <p className="m-0">{obj.answer.trim()}</p>
           {Array.isArray(obj.gaps) && obj.gaps.length > 0 ? (
             <div>
-              <h3 className="mb-1 mt-3 text-sm">Gaps</h3>
-              <ul className="m-0 list-disc pl-5 text-sm text-muted">
+              <h3 className="mt-3 mb-1 text-sm">Gaps</h3>
+              <ul className="m-0 list-disc pl-5 text-muted text-sm">
                 {obj.gaps.map((gap) => (
                   <li key={gap}>{gap}</li>
                 ))}
@@ -114,7 +117,9 @@ function ReadableAnswer({ mode, answer }: { mode?: AskMode; answer: string }) {
     }
   }
 
-  return <p className="m-0 font-display text-base leading-snug text-ink">{answer}</p>;
+  return (
+    <p className="m-0 font-display text-base text-ink leading-snug">{answer}</p>
+  );
 }
 
 export function ResponseView({
@@ -126,18 +131,18 @@ export function ResponseView({
 }) {
   if (pending) {
     return (
-      <section className="flex flex-col gap-2.5 rounded-md border border-line bg-surface p-4">
-        <h2 className="m-0 font-display text-lg text-ink">Response</h2>
-        <p className="m-0 text-sm text-muted">Calling Bun API…</p>
+      <section className="flex flex-col gap-2.5">
+        <h2 className="m-0 font-display text-ink text-lg">Response</h2>
+        <p className="m-0 text-muted text-sm">Calling Bun API…</p>
       </section>
     );
   }
 
   if (!payload) {
     return (
-      <section className="flex flex-col gap-2.5 rounded-md border border-line bg-surface p-4">
-        <h2 className="m-0 font-display text-lg text-ink">Response</h2>
-        <p className="m-0 text-sm text-muted">—</p>
+      <section className="flex flex-col gap-2.5">
+        <h2 className="m-0 font-display text-ink text-lg">Response</h2>
+        <p className="m-0 text-muted text-sm">—</p>
       </section>
     );
   }
@@ -145,32 +150,35 @@ export function ResponseView({
   const raw = JSON.stringify(payload, null, 2);
 
   return (
-    <section className="flex flex-col gap-3.5 rounded-md border border-line bg-surface p-4">
-      <h2 className="m-0 font-display text-lg text-ink">Response</h2>
+    <section className="flex flex-col gap-3.5">
+      <h2 className="m-0 font-display text-ink text-lg">Response</h2>
 
       <div className="flex flex-col gap-3">
         {payload.error ? (
           <p className="m-0 text-danger">{payload.error}</p>
         ) : payload.saved ? (
-          <div className="font-display text-base leading-snug text-ink">
+          <div className="font-display text-base text-ink leading-snug">
             <p className="m-0">
               Saved note{payload.slug ? ` as ` : "."}
-              {payload.slug ? <code className="font-mono text-sm">{payload.slug}</code> : null}
+              {payload.slug ? (
+                <code className="font-mono text-sm">{payload.slug}</code>
+              ) : null}
               {payload.userId ? ` for ${payload.userId}` : null}.
             </p>
           </div>
         ) : typeof payload.answer === "string" ? (
           <ReadableAnswer mode={payload.mode} answer={payload.answer} />
         ) : (
-          <p className="m-0 text-sm text-muted">No answer field.</p>
+          <p className="m-0 text-muted text-sm">No answer field.</p>
         )}
       </div>
 
-      {(payload.userId || payload.mode || payload.sessionId) && !payload.error ? (
-        <p className="m-0 font-mono text-xs text-muted">
+      {(payload.userId || payload.mode || payload.sessionId) &&
+      !payload.error ? (
+        <p className="m-0 font-mono text-muted text-xs">
           {[
             payload.userId ? `user ${payload.userId}` : null,
-            payload.mode ? `mode ${payload.mode}` : null,
+            payload.mode ? `mode ${modeLabel(payload.mode)}` : null,
             payload.sessionId ? `session ${payload.sessionId}` : null,
           ]
             .filter(Boolean)
@@ -178,8 +186,10 @@ export function ResponseView({
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-1.5 border-t border-line pt-2.5">
-        <h3 className="m-0 font-mono text-sm font-normal text-muted">Raw JSON</h3>
+      <div className="flex flex-col gap-1.5 border-line border-t pt-2.5">
+        <h3 className="m-0 font-mono font-normal text-muted text-sm">
+          Raw JSON
+        </h3>
         <pre className="m-0 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-line bg-canvas p-2.5 font-mono text-xs leading-snug">
           {raw}
         </pre>
